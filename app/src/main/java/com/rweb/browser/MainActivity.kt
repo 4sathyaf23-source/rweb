@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -26,6 +28,7 @@ import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
 import android.webkit.URLUtil
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -64,12 +67,19 @@ class MainActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var mobileUa: String
     private var pendingMedia: PermissionRequest? = null
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private val engines = listOf(
+        Pair("Google", "https://www.google.com/search?q="),
+        Pair("DuckDuckGo", "https://duckduckgo.com/?q="),
+        Pair("Bing", "https://www.bing.com/search?q=")
+    )
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
     companion object {
         const val DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        const val START_HTML = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#2A201B;color:#F3E9E4;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}h1{color:#E8909F;font-size:44px;margin:0 0 24px}form{width:86%;max-width:520px}input{width:100%;box-sizing:border-box;padding:14px 18px;border-radius:26px;border:0;background:#372A24;color:#F3E9E4;font-size:16px}</style></head><body><h1>rweb</h1><form action="https://www.google.com/search" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form></body></html>"""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px 0;box-sizing:border-box;background:#2A201B;color:#F3E9E4;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:#E8909F;font-size:44px;margin:0 0 24px}form{width:86%;max-width:520px}input{width:100%;box-sizing:border-box;padding:14px 18px;border-radius:26px;border:0;background:#372A24;color:#F3E9E4;font-size:16px}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:28px;width:90%;max-width:520px}.tile{width:72px;text-decoration:none;color:#F3E9E4;text-align:center;font-size:12px}.ic{display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 6px;border-radius:50%;background:#372A24;color:#E8909F;font-size:22px;font-weight:700}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}</style></head><body><h1>rweb</h1><form action=""""
+        const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -182,13 +192,13 @@ class MainActivity : Activity() {
     }
 
     private fun go(text: String) {
-        val target = UrlUtil.toNavigationTarget(text)
+        val target = UrlUtil.toNavigationTarget(text, searchBase())
         if (target.isEmpty()) return
         current().web.loadUrl(target)
     }
 
     private fun loadStart(web: WebView) {
-        web.loadDataWithBaseURL(null, START_HTML, "text/html", "utf-8", null)
+        web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
     }
 
     private fun newTab(url: String?) {
@@ -282,6 +292,25 @@ class MainActivity : Activity() {
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 if (!title.isNullOrBlank() && !title.startsWith("about:")) tab.title = title
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                val params = fileChooserParams ?: return false
+                fileCallback?.onReceiveValue(null)
+                fileCallback = filePathCallback
+                return try {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(params.createIntent(), 200)
+                    true
+                } catch (e: Exception) {
+                    fileCallback = null
+                    toast("Can't open the file picker")
+                    false
+                }
             }
 
             override fun onPermissionRequest(request: PermissionRequest?) {
@@ -395,6 +424,104 @@ class MainActivity : Activity() {
         }
     }
 
+    // ---- start page, search engine, extra tools ----
+
+    private fun searchBase(): String {
+        val saved = prefs.getString("search", null)
+        return if (saved != null && engines.any { it.second == saved }) saved else engines[0].second
+    }
+
+    private fun chooseEngine() {
+        val names = engines.map { it.first }.toTypedArray()
+        val idx = engines.indexOfFirst { it.second == searchBase() }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Search engine")
+            .setSingleChoiceItems(names, idx) { d, i ->
+                prefs.edit().putString("search", engines[i].second).apply()
+                toast(names[i])
+                d.dismiss()
+            }.show()
+    }
+
+    private fun esc(s: String): String =
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+    private fun startHtml(): String {
+        val tiles = mutableListOf(
+            Pair("Google", "https://www.google.com"),
+            Pair("YouTube", "https://www.youtube.com"),
+            Pair("Wikipedia", "https://www.wikipedia.org"),
+            Pair("GitHub", "https://github.com")
+        )
+        for (b in loadList("bookmarks").take(8)) {
+            if (tiles.none { it.second == b.second }) {
+                tiles.add(Pair(if (b.first.isBlank()) b.second else b.first, b.second))
+            }
+        }
+        val sb = StringBuilder()
+        sb.append(HEAD_A).append(esc(searchBase().substringBefore("?q="))).append(HEAD_B)
+        for (t in tiles) {
+            val letter = t.first.trim().take(1).uppercase()
+            sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
+            sb.append("<span class=\"ic\">").append(esc(letter)).append("</span>")
+            sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
+        }
+        sb.append("</div></body></html>")
+        return sb.toString()
+    }
+
+    private fun openDownloads() {
+        try {
+            startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
+        } catch (e: Exception) {
+            toast("Can't open Downloads")
+        }
+    }
+
+    private fun copyLink() {
+        val u = current().url
+        if (u.isEmpty()) {
+            toast("Open a page first")
+            return
+        }
+        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("link", u))
+        toast("Link copied")
+    }
+
+    private fun findInPage() {
+        val web = current().web
+        val input = EditText(this)
+        input.setSingleLine()
+        input.hint = "Find in page"
+        val dlg = AlertDialog.Builder(this)
+            .setTitle("Find in page")
+            .setView(input)
+            .setPositiveButton("Find", null)
+            .setNeutralButton("Next", null)
+            .setNegativeButton("Close", null)
+            .create()
+        dlg.setOnDismissListener {
+            web.clearMatches()
+            web.setFindListener(null)
+        }
+        dlg.show()
+        web.setFindListener { active, total, _ ->
+            dlg.setTitle(if (total == 0) "No matches" else "Match " + (active + 1) + " of " + total)
+        }
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { web.findAllAsync(input.text.toString()) }
+        dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { web.findNext(true) }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 200) {
+            fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+            fileCallback = null
+        }
+    }
+
     // ---- storage (history and bookmarks) ----
 
     private fun loadList(key: String): MutableList<Pair<String, String>> {
@@ -495,7 +622,11 @@ class MainActivity : Activity() {
             "Bookmark this page",
             "Bookmarks",
             "History",
+            "Downloads",
+            "Find in page",
+            "Search engine: " + engines.first { it.second == searchBase() }.first,
             if (desktop) "Desktop site: ON" else "Desktop site: OFF",
+            "Copy link",
             "Share page",
             "Clear browsing data"
         )
@@ -505,9 +636,13 @@ class MainActivity : Activity() {
                 1 -> addBookmark()
                 2 -> showList("Bookmarks", "bookmarks")
                 3 -> showList("History", "history")
-                4 -> toggleDesktop()
-                5 -> sharePage()
-                6 -> clearData()
+                4 -> openDownloads()
+                5 -> findInPage()
+                6 -> chooseEngine()
+                7 -> toggleDesktop()
+                8 -> copyLink()
+                9 -> sharePage()
+                10 -> clearData()
             }
         }.show()
     }
