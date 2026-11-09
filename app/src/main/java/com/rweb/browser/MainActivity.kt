@@ -21,6 +21,8 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
+import android.webkit.RenderProcessGoneDetail
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -56,6 +58,9 @@ class MainActivity : Activity() {
     private class Tab(val web: WebView, val priv: Boolean = false) {
         var title = "New tab"
         var url = ""
+        var desktop = false
+        var lastHistoryUrl = ""
+        var pendingUrl: String? = null
     }
 
     private val BG = Color.parseColor("#2A201B")
@@ -66,7 +71,6 @@ class MainActivity : Activity() {
 
     private val tabs = mutableListOf<Tab>()
     private var cur = -1
-    private var desktop = false
     private lateinit var address: EditText
     private lateinit var progress: ProgressBar
     private lateinit var content: FrameLayout
@@ -109,7 +113,42 @@ class MainActivity : Activity() {
         window.navigationBarColor = BAR
         wipePrivate()
         buildUi()
-        newTab(intent?.data?.toString())
+        if (savedInstanceState != null) restoreTabs(savedInstanceState)
+        if (tabs.isEmpty()) newTab(intent?.data?.toString())
+    }
+
+    private fun currentOrNull(): Tab? = tabs.getOrNull(cur)
+
+    // Private tabs are never saved.
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val normal = tabs.filter { !it.priv }
+        outState.putStringArray("tab_urls", normal.map { it.url }.toTypedArray())
+        outState.putStringArray("tab_titles", normal.map { it.title }.toTypedArray())
+        outState.putBooleanArray("tab_desktops", normal.map { it.desktop }.toBooleanArray())
+        val c = currentOrNull()
+        outState.putInt("cur_tab", if (c != null && !c.priv) normal.indexOf(c) else 0)
+    }
+
+    private fun restoreTabs(b: Bundle) {
+        val urls = b.getStringArray("tab_urls") ?: return
+        val titles = b.getStringArray("tab_titles")
+        val desktops = b.getBooleanArray("tab_desktops")
+        for (i in urls.indices) {
+            val web = try {
+                createWebView(false)
+            } catch (e: Exception) {
+                continue
+            }
+            val tab = Tab(web, false)
+            tab.url = urls[i]
+            tab.title = titles?.getOrNull(i) ?: "New tab"
+            tab.desktop = desktops?.getOrNull(i) ?: false
+            tab.pendingUrl = urls[i]
+            setupWeb(tab)
+            tabs.add(tab)
+        }
+        if (tabs.isNotEmpty()) switchTo(b.getInt("cur_tab", 0).coerceIn(0, tabs.size - 1))
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -228,22 +267,34 @@ class MainActivity : Activity() {
         refreshNews()
     }
 
-    private fun newTab(url: String?, priv: Boolean = false) {
+    private fun createWebView(priv: Boolean): WebView {
         val web = WebView(this)
         if (priv) {
             try {
                 if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-                    web.destroy()
-                    toast("Private tabs need a newer Android System WebView. Update it in Play Store.")
-                    return
+                    throw IllegalStateException("Private profiles are not supported")
                 }
-                ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
+                val profile = ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
                 WebViewCompat.setProfile(web, PRIVATE_PROFILE)
+                profile.cookieManager.setAcceptCookie(true)
+                profile.cookieManager.setAcceptThirdPartyCookies(web, false)
             } catch (e: Exception) {
                 web.destroy()
-                toast("Couldn't start a private tab")
-                return
+                throw e
             }
+        } else {
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
+        }
+        return web
+    }
+
+    private fun newTab(url: String?, priv: Boolean = false) {
+        val web = try {
+            createWebView(priv)
+        } catch (e: Exception) {
+            toast(if (priv) "Private tabs need a newer Android System WebView. Update it in the Play Store." else "Couldn't open a new tab")
+            return
         }
         val tab = Tab(web, priv)
         setupWeb(tab)
@@ -263,12 +314,28 @@ class MainActivity : Activity() {
         address.hint = if (t.priv) "Private tab: search or enter address" else "Search or enter address"
         tabBtn.text = tabs.size.toString()
         progress.visibility = View.GONE
+        if (t.priv) {
+            window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        t.pendingUrl?.let {
+            t.pendingUrl = null
+            if (it.isEmpty()) loadStart(t.web) else t.web.loadUrl(it)
+        }
     }
 
     private fun closeTab(i: Int) {
         val t = tabs.removeAt(i)
         content.removeView(t.web)
-        t.web.destroy()
+        try {
+            t.web.stopLoading()
+            t.web.loadUrl("about:blank")
+            t.web.clearHistory()
+            t.web.removeAllViews()
+            t.web.destroy()
+        } catch (e: Exception) {
+        }
         if (t.priv && tabs.none { it.priv }) wipePrivate()
         if (tabs.isEmpty()) {
             cur = -1
@@ -293,8 +360,8 @@ class MainActivity : Activity() {
         s.allowFileAccess = false
         s.allowContentAccess = false
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-        s.userAgentString = if (desktop) DESKTOP_UA else mobileUa
-        if (!tab.priv) CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
+        s.safeBrowsingEnabled = true
+        s.userAgentString = if (tab.desktop) DESKTOP_UA else mobileUa
 
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -309,7 +376,10 @@ class MainActivity : Activity() {
                 if (tab.url.isNotEmpty()) {
                     val t = view?.title
                     if (!t.isNullOrBlank()) tab.title = t
-                    if (!tab.priv) addHistory(tab.title, tab.url)
+                    if (!tab.priv && tab.url.startsWith("http") && tab.url != tab.lastHistoryUrl) {
+                        addHistory(tab.title, tab.url)
+                        tab.lastHistoryUrl = tab.url
+                    }
                 } else {
                     tab.title = "New tab"
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
@@ -326,6 +396,56 @@ class MainActivity : Activity() {
                 } catch (e: Exception) {
                     toast("No app can open this link")
                 }
+                return true
+            }
+
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: android.webkit.SslErrorHandler?,
+                error: android.net.http.SslError?
+            ) {
+                handler?.cancel()
+                val failing = error?.url
+                if (failing != null && failing == view?.url) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Connection not secure")
+                        .setMessage("This site's security certificate isn't valid, so rweb blocked it.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
+
+            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                val idx = tabs.indexOf(tab)
+                if (idx < 0) return true
+                val wasCurrent = idx == cur
+                val crashedUrl = tab.url
+                try {
+                    (view?.parent as? ViewGroup)?.removeView(view)
+                    view?.destroy()
+                } catch (e: Exception) {
+                }
+                val newWeb = try {
+                    createWebView(tab.priv)
+                } catch (e: Exception) {
+                    tabs.removeAt(idx)
+                    if (tabs.isEmpty()) {
+                        cur = -1
+                        newTab(null)
+                    } else {
+                        switchTo(minOf(idx, tabs.size - 1))
+                    }
+                    toast("A page crashed and was closed")
+                    return true
+                }
+                val fresh = Tab(newWeb, tab.priv)
+                fresh.desktop = tab.desktop
+                fresh.url = crashedUrl
+                fresh.pendingUrl = crashedUrl
+                setupWeb(fresh)
+                tabs[idx] = fresh
+                if (wasCurrent) switchTo(idx)
+                toast("Page crashed and was reloaded")
                 return true
             }
         }
@@ -617,18 +737,22 @@ class MainActivity : Activity() {
             while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
                 if (ev == XmlPullParser.START_TAG) {
                     tag = parser.name
-                    if (tag == "item") {
+                    if (tag == "item" || tag == "entry") {
                         inItem = true
                         title = ""
                         link = ""
+                    } else if (inItem && tag == "link") {
+                        val rel = parser.getAttributeValue(null, "rel")
+                        val href = parser.getAttributeValue(null, "href")
+                        if (href != null && link.isEmpty() && (rel == null || rel == "alternate")) link = href
                     }
                 } else if (ev == XmlPullParser.TEXT) {
                     if (inItem) {
                         if (tag == "title") title += parser.text
-                        else if (tag == "link") link += parser.text
+                        else if (tag == "link" && link.isEmpty()) link += parser.text
                     }
                 } else if (ev == XmlPullParser.END_TAG) {
-                    if (parser.name == "item") {
+                    if (parser.name == "item" || parser.name == "entry") {
                         inItem = false
                         val l = link.trim()
                         if (title.isNotBlank() && (l.startsWith("https://") || l.startsWith("http://"))) {
@@ -814,7 +938,7 @@ class MainActivity : Activity() {
             "Find in page",
             "Search engine: " + engines.first { it.second == searchBase() }.first,
             "News source: " + feedName(),
-            if (desktop) "Desktop site: ON" else "Desktop site: OFF",
+            if (current().desktop) "Desktop site: ON" else "Desktop site: OFF",
             "Copy link",
             "Share page",
             "Clear browsing data"
@@ -839,10 +963,11 @@ class MainActivity : Activity() {
     }
 
     private fun toggleDesktop() {
-        desktop = !desktop
-        for (t in tabs) t.web.settings.userAgentString = if (desktop) DESKTOP_UA else mobileUa
-        current().web.reload()
-        toast(if (desktop) "Desktop site on" else "Desktop site off")
+        val t = current()
+        t.desktop = !t.desktop
+        t.web.settings.userAgentString = if (t.desktop) DESKTOP_UA else mobileUa
+        t.web.reload()
+        toast(if (t.desktop) "Desktop site on" else "Desktop site off")
     }
 
     private fun sharePage() {
@@ -858,8 +983,13 @@ class MainActivity : Activity() {
     }
 
     private fun clearData() {
-        for (t in tabs) t.web.clearCache(true)
+        for (t in tabs) {
+            t.web.clearCache(true)
+            t.web.clearFormData()
+            t.web.clearSslPreferences()
+        }
         CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()
         saveList("history", emptyList())
         toast("Browsing data cleared")
@@ -885,7 +1015,14 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        for (t in tabs) t.web.destroy()
+        val hadPrivate = tabs.any { it.priv }
+        for (t in tabs) {
+            try {
+                t.web.destroy()
+            } catch (e: Exception) {
+            }
+        }
+        if (hadPrivate) wipePrivate()
         super.onDestroy()
     }
 }
