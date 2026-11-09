@@ -1,11 +1,13 @@
 package com.rweb.browser
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -21,6 +23,8 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -59,6 +63,9 @@ class MainActivity : Activity() {
     private lateinit var tabBtn: TextView
     private lateinit var prefs: SharedPreferences
     private lateinit var mobileUa: String
+    private var pendingMedia: PermissionRequest? = null
+    private var pendingGeoOrigin: String? = null
+    private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
     companion object {
         const val DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -276,6 +283,21 @@ class MainActivity : Activity() {
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 if (!title.isNullOrBlank() && !title.startsWith("about:")) tab.title = title
             }
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                val req = request ?: return
+                runOnUiThread { askMediaPermission(req) }
+            }
+
+            override fun onPermissionRequestCanceled(request: PermissionRequest?) {
+                if (pendingMedia === request) pendingMedia = null
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+                val cb = callback ?: return
+                val o = origin ?: return
+                runOnUiThread { askLocation(o, cb) }
+            }
         }
 
         web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
@@ -293,6 +315,83 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 toast("Download failed")
             }
+        }
+    }
+
+    // ---- site permissions (camera, microphone, location) ----
+
+    private fun has(p: String): Boolean =
+        checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
+
+    private fun askMediaPermission(req: PermissionRequest) {
+        val cam = req.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+        val mic = req.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+        if (!cam && !mic) {
+            req.deny()
+            return
+        }
+        val what = if (cam && mic) "camera and microphone" else if (cam) "camera" else "microphone"
+        AlertDialog.Builder(this)
+            .setTitle("Allow " + what + "?")
+            .setMessage(req.origin.host + " wants to use your " + what + ".")
+            .setPositiveButton("Allow") { _, _ -> grantMedia(req, cam, mic) }
+            .setNegativeButton("Block") { _, _ -> req.deny() }
+            .setOnCancelListener { req.deny() }
+            .show()
+    }
+
+    private fun grantMedia(req: PermissionRequest, cam: Boolean, mic: Boolean) {
+        val needed = mutableListOf<String>()
+        if (cam && !has(Manifest.permission.CAMERA)) needed.add(Manifest.permission.CAMERA)
+        if (mic && !has(Manifest.permission.RECORD_AUDIO)) needed.add(Manifest.permission.RECORD_AUDIO)
+        if (needed.isEmpty()) {
+            finishMedia(req)
+            return
+        }
+        pendingMedia = req
+        requestPermissions(needed.toTypedArray(), 100)
+    }
+
+    private fun finishMedia(req: PermissionRequest) {
+        val ok = mutableListOf<String>()
+        for (r in req.resources) {
+            if (r == PermissionRequest.RESOURCE_VIDEO_CAPTURE && has(Manifest.permission.CAMERA)) ok.add(r)
+            if (r == PermissionRequest.RESOURCE_AUDIO_CAPTURE && has(Manifest.permission.RECORD_AUDIO)) ok.add(r)
+        }
+        if (ok.isEmpty()) req.deny() else req.grant(ok.toTypedArray())
+    }
+
+    private fun askLocation(origin: String, cb: GeolocationPermissions.Callback) {
+        AlertDialog.Builder(this)
+            .setTitle("Allow location?")
+            .setMessage(Uri.parse(origin).host.toString() + " wants to know your location.")
+            .setPositiveButton("Allow") { _, _ ->
+                if (has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION)) {
+                    cb.invoke(origin, true, false)
+                } else {
+                    pendingGeoOrigin = origin
+                    pendingGeoCb = cb
+                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 101)
+                }
+            }
+            .setNegativeButton("Block") { _, _ -> cb.invoke(origin, false, false) }
+            .setOnCancelListener { cb.invoke(origin, false, false) }
+            .show()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 100) {
+            pendingMedia?.let { finishMedia(it) }
+            pendingMedia = null
+        } else if (requestCode == 101) {
+            val cb = pendingGeoCb
+            val o = pendingGeoOrigin
+            if (cb != null && o != null) {
+                cb.invoke(o, has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION), false)
+            }
+            pendingGeoCb = null
+            pendingGeoOrigin = null
         }
     }
 
