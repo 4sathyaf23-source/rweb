@@ -43,10 +43,17 @@ import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.webkit.ProfileStore
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import android.util.Xml
+import java.net.HttpURLConnection
+import java.net.URL
+import org.xmlpull.v1.XmlPullParser
 
 class MainActivity : Activity() {
 
-    private class Tab(val web: WebView) {
+    private class Tab(val web: WebView, val priv: Boolean = false) {
         var title = "New tab"
         var url = ""
     }
@@ -68,6 +75,17 @@ class MainActivity : Activity() {
     private lateinit var mobileUa: String
     private var pendingMedia: PermissionRequest? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private lateinit var topBar: LinearLayout
+    private val PRIV = Color.parseColor("#33283A")
+    private var newsHtml: String? = null
+    private var newsTime = 0L
+    private var newsLoading = false
+    private val feeds = listOf(
+        Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
+        Pair("Google News", "https://news.google.com/rss"),
+        Pair("NPR", "https://feeds.npr.org/1001/rss.xml"),
+        Pair("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml")
+    )
     private val engines = listOf(
         Pair("Google", "https://www.google.com/search?q="),
         Pair("DuckDuckGo", "https://duckduckgo.com/?q="),
@@ -77,8 +95,9 @@ class MainActivity : Activity() {
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
     companion object {
+        const val PRIVATE_PROFILE = "rwebprivate"
         const val DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px 0;box-sizing:border-box;background:#2A201B;color:#F3E9E4;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:#E8909F;font-size:44px;margin:0 0 24px}form{width:86%;max-width:520px}input{width:100%;box-sizing:border-box;padding:14px 18px;border-radius:26px;border:0;background:#372A24;color:#F3E9E4;font-size:16px}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:28px;width:90%;max-width:520px}.tile{width:72px;text-decoration:none;color:#F3E9E4;text-align:center;font-size:12px}.ic{display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 6px;border-radius:50%;background:#372A24;color:#E8909F;font-size:22px;font-weight:700}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}</style></head><body><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px 0;box-sizing:border-box;background:#2A201B;color:#F3E9E4;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:#E8909F;font-size:44px;margin:0 0 24px}form{width:86%;max-width:520px}input{width:100%;box-sizing:border-box;padding:14px 18px;border-radius:26px;border:0;background:#372A24;color:#F3E9E4;font-size:16px}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:28px;width:90%;max-width:520px}.tile{width:72px;text-decoration:none;color:#F3E9E4;text-align:center;font-size:12px}.ic{display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 6px;border-radius:50%;background:#372A24;color:#E8909F;font-size:22px;font-weight:700}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:90%;max-width:520px;margin-top:28px}.nh{font-size:12px;color:#A89690;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.nw{display:block;padding:12px 14px;margin-bottom:8px;background:#372A24;border-radius:14px;color:#F3E9E4;text-decoration:none;font-size:14px;line-height:1.35}</style></head><body><h1>rweb</h1><form action=""""
         const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
 
@@ -88,6 +107,7 @@ class MainActivity : Activity() {
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         window.statusBarColor = BG
         window.navigationBarColor = BAR
+        wipePrivate()
         buildUi()
         newTab(intent?.data?.toString())
     }
@@ -120,7 +140,8 @@ class MainActivity : Activity() {
         root.orientation = LinearLayout.VERTICAL
         root.setBackgroundColor(BG)
 
-        val top = LinearLayout(this)
+        topBar = LinearLayout(this)
+        val top = topBar
         top.orientation = LinearLayout.HORIZONTAL
         top.gravity = Gravity.CENTER_VERTICAL
         top.setBackgroundColor(BAR)
@@ -198,11 +219,33 @@ class MainActivity : Activity() {
     }
 
     private fun loadStart(web: WebView) {
+        val tab = tabs.firstOrNull { it.web === web }
+        if (tab != null && tab.priv) {
+            web.loadDataWithBaseURL(null, privateHtml(), "text/html", "utf-8", null)
+            return
+        }
         web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
+        refreshNews()
     }
 
-    private fun newTab(url: String?) {
-        val tab = Tab(WebView(this))
+    private fun newTab(url: String?, priv: Boolean = false) {
+        val web = WebView(this)
+        if (priv) {
+            try {
+                if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                    web.destroy()
+                    toast("Private tabs need a newer Android System WebView. Update it in Play Store.")
+                    return
+                }
+                ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
+                WebViewCompat.setProfile(web, PRIVATE_PROFILE)
+            } catch (e: Exception) {
+                web.destroy()
+                toast("Couldn't start a private tab")
+                return
+            }
+        }
+        val tab = Tab(web, priv)
         setupWeb(tab)
         tabs.add(tab)
         switchTo(tabs.size - 1)
@@ -216,6 +259,8 @@ class MainActivity : Activity() {
         content.addView(t.web, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         address.setText(displayUrl(t.url))
         address.clearFocus()
+        topBar.setBackgroundColor(if (t.priv) PRIV else BAR)
+        address.hint = if (t.priv) "Private tab: search or enter address" else "Search or enter address"
         tabBtn.text = tabs.size.toString()
         progress.visibility = View.GONE
     }
@@ -224,6 +269,7 @@ class MainActivity : Activity() {
         val t = tabs.removeAt(i)
         content.removeView(t.web)
         t.web.destroy()
+        if (t.priv && tabs.none { it.priv }) wipePrivate()
         if (tabs.isEmpty()) {
             cur = -1
             newTab(null)
@@ -248,7 +294,7 @@ class MainActivity : Activity() {
         s.allowContentAccess = false
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         s.userAgentString = if (desktop) DESKTOP_UA else mobileUa
-        CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
+        if (!tab.priv) CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
 
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -263,9 +309,10 @@ class MainActivity : Activity() {
                 if (tab.url.isNotEmpty()) {
                     val t = view?.title
                     if (!t.isNullOrBlank()) tab.title = t
-                    addHistory(tab.title, tab.url)
+                    if (!tab.priv) addHistory(tab.title, tab.url)
                 } else {
                     tab.title = "New tab"
+                    if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab) address.setText(tab.url)
             }
@@ -335,7 +382,12 @@ class MainActivity : Activity() {
                 val req = DownloadManager.Request(Uri.parse(url))
                 req.setMimeType(mimeType)
                 req.addRequestHeader("User-Agent", userAgent)
-                CookieManager.getInstance().getCookie(url)?.let { req.addRequestHeader("Cookie", it) }
+                val cm: CookieManager = if (tab.priv) {
+                    ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE).cookieManager
+                } else {
+                    CookieManager.getInstance()
+                }
+                cm.getCookie(url)?.let { req.addRequestHeader("Cookie", it) }
                 req.setTitle(name)
                 req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
@@ -466,6 +518,8 @@ class MainActivity : Activity() {
             sb.append("<span class=\"ic\">").append(esc(letter)).append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
+        sb.append("</div><div id=\"news\">")
+        sb.append(newsHtml ?: "<div class=\"nh\">Loading news...</div>")
         sb.append("</div></body></html>")
         return sb.toString()
     }
@@ -520,6 +574,139 @@ class MainActivity : Activity() {
             fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
             fileCallback = null
         }
+    }
+
+    // ---- private tabs and news ----
+
+    private fun privateHtml(): String {
+        return HEAD_A + esc(searchBase().substringBefore("?q=")) + HEAD_B +
+            "</div><div id=\"news\" style=\"text-align:center;color:#A89690;font-size:14px;line-height:1.5\">" +
+            "<b style=\"color:#E8909F\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.</div></body></html>"
+    }
+
+    private fun wipePrivate() {
+        try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                ProfileStore.getInstance().deleteProfile(PRIVATE_PROFILE)
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun feedUrl(): String {
+        val saved = prefs.getString("news", null)
+        return if (saved != null && feeds.any { it.second == saved }) saved else feeds[0].second
+    }
+
+    private fun feedName(): String = feeds.first { it.second == feedUrl() }.first
+
+    private fun fetchNews(feed: String): List<Pair<String, String>> {
+        val out = mutableListOf<Pair<String, String>>()
+        val conn = URL(feed).openConnection() as HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) rweb")
+        try {
+            val parser = Xml.newPullParser()
+            parser.setInput(conn.inputStream, null)
+            var inItem = false
+            var title = ""
+            var link = ""
+            var tag = ""
+            var ev = parser.eventType
+            while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
+                if (ev == XmlPullParser.START_TAG) {
+                    tag = parser.name
+                    if (tag == "item") {
+                        inItem = true
+                        title = ""
+                        link = ""
+                    }
+                } else if (ev == XmlPullParser.TEXT) {
+                    if (inItem) {
+                        if (tag == "title") title += parser.text
+                        else if (tag == "link") link += parser.text
+                    }
+                } else if (ev == XmlPullParser.END_TAG) {
+                    if (parser.name == "item") {
+                        inItem = false
+                        val l = link.trim()
+                        if (title.isNotBlank() && (l.startsWith("https://") || l.startsWith("http://"))) {
+                            out.add(Pair(title.trim(), l))
+                        }
+                    }
+                    tag = ""
+                }
+                ev = parser.next()
+            }
+        } finally {
+            conn.disconnect()
+        }
+        return out
+    }
+
+    private fun buildNews(name: String, items: List<Pair<String, String>>): String {
+        val sb = StringBuilder()
+        sb.append("<div class=\"nh\">Top news \u00B7 ").append(esc(name)).append("</div>")
+        for (n in items) {
+            sb.append("<a class=\"nw\" href=\"").append(esc(n.second)).append("\">")
+            sb.append(esc(n.first)).append("</a>")
+        }
+        return sb.toString()
+    }
+
+    private fun injectNews(web: WebView, html: String) {
+        web.evaluateJavascript(
+            "(function(){var e=document.getElementById('news');if(e){e.innerHTML=" + JSONObject.quote(html) + ";}})()",
+            null
+        )
+    }
+
+    private fun refreshNews() {
+        if (newsLoading) return
+        if (newsHtml != null && System.currentTimeMillis() - newsTime < 10 * 60 * 1000) return
+        newsLoading = true
+        val feed = feedUrl()
+        val name = feedName()
+        Thread {
+            val html: String? = try {
+                val items = fetchNews(feed)
+                if (items.isEmpty()) null else buildNews(name, items)
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                newsLoading = false
+                if (feed != feedUrl()) {
+                    refreshNews()
+                } else {
+                    if (html != null) {
+                        newsHtml = html
+                        newsTime = System.currentTimeMillis()
+                    }
+                    val show = html
+                        ?: "<div class=\"nh\">Couldn't load news. Check your connection or pick another source in the menu.</div>"
+                    for (t in tabs) {
+                        if (!t.priv && t.url.isEmpty()) injectNews(t.web, show)
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun chooseNews() {
+        val names = feeds.map { it.first }.toTypedArray()
+        val idx = feeds.indexOfFirst { it.second == feedUrl() }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("News source")
+            .setSingleChoiceItems(names, idx) { d, i ->
+                prefs.edit().putString("news", feeds[i].second).apply()
+                newsHtml = null
+                newsTime = 0L
+                d.dismiss()
+                val t = current()
+                if (t.url.isEmpty() && !t.priv) loadStart(t.web)
+            }.show()
     }
 
     // ---- storage (history and bookmarks) ----
@@ -605,7 +792,7 @@ class MainActivity : Activity() {
 
     private fun showTabs() {
         val labels = tabs.mapIndexed { i, t ->
-            (if (i == cur) "\u25CF " else "    ") + (if (t.title.isBlank()) "New tab" else t.title)
+            (if (i == cur) "\u25CF " else "    ") + (if (t.priv) "(Private) " else "") + (if (t.title.isBlank()) "New tab" else t.title)
         }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Tabs (" + tabs.size + ")")
@@ -619,12 +806,14 @@ class MainActivity : Activity() {
     private fun showMenu() {
         val items = arrayOf(
             "New tab",
+            "New private tab",
             "Bookmark this page",
             "Bookmarks",
             "History",
             "Downloads",
             "Find in page",
             "Search engine: " + engines.first { it.second == searchBase() }.first,
+            "News source: " + feedName(),
             if (desktop) "Desktop site: ON" else "Desktop site: OFF",
             "Copy link",
             "Share page",
@@ -633,16 +822,18 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setItems(items) { _, i ->
             when (i) {
                 0 -> newTab(null)
-                1 -> addBookmark()
-                2 -> showList("Bookmarks", "bookmarks")
-                3 -> showList("History", "history")
-                4 -> openDownloads()
-                5 -> findInPage()
-                6 -> chooseEngine()
-                7 -> toggleDesktop()
-                8 -> copyLink()
-                9 -> sharePage()
-                10 -> clearData()
+                1 -> newTab(null, true)
+                2 -> addBookmark()
+                3 -> showList("Bookmarks", "bookmarks")
+                4 -> showList("History", "history")
+                5 -> openDownloads()
+                6 -> findInPage()
+                7 -> chooseEngine()
+                8 -> chooseNews()
+                9 -> toggleDesktop()
+                10 -> copyLink()
+                11 -> sharePage()
+                12 -> clearData()
             }
         }.show()
     }
