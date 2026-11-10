@@ -15,7 +15,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.content.pm.ActivityInfo
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Message
 import android.os.Environment
 import android.text.InputType
 import android.view.Gravity
@@ -80,6 +84,9 @@ class MainActivity : Activity() {
     private var pendingMedia: PermissionRequest? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private lateinit var topBar: LinearLayout
+    private lateinit var fullscreenHolder: FrameLayout
+    private var customView: View? = null
+    private var customCb: WebChromeClient.CustomViewCallback? = null
     private val PRIV = Color.parseColor("#33283A")
     private var newsHtml: String? = null
     private var newsTime = 0L
@@ -101,7 +108,7 @@ class MainActivity : Activity() {
     companion object {
         const val PRIVATE_PROFILE = "rwebprivate"
         const val DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px 0;box-sizing:border-box;background:#2A201B;color:#F3E9E4;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:#E8909F;font-size:44px;margin:0 0 24px}form{width:86%;max-width:520px}input{width:100%;box-sizing:border-box;padding:14px 18px;border-radius:26px;border:0;background:#372A24;color:#F3E9E4;font-size:16px}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:28px;width:90%;max-width:520px}.tile{width:72px;text-decoration:none;color:#F3E9E4;text-align:center;font-size:12px}.ic{display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 6px;border-radius:50%;background:#372A24;color:#E8909F;font-size:22px;font-weight:700}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:90%;max-width:520px;margin-top:28px}.nh{font-size:12px;color:#A89690;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.nw{display:block;padding:12px 14px;margin-bottom:8px;background:#372A24;border-radius:14px;color:#F3E9E4;text-decoration:none;font-size:14px;line-height:1.35}</style></head><body><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:24px 0;box-sizing:border-box;background:#FFFFFF;color:#202124;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:#D93025;font-size:44px;margin:0 0 24px}form{width:86%;max-width:520px}input{width:100%;box-sizing:border-box;padding:14px 18px;border-radius:26px;border:1px solid #DADCE0;background:#F1F3F4;color:#202124;font-size:16px}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-top:28px;width:90%;max-width:520px}.tile{width:72px;text-decoration:none;color:#202124;text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 6px;border-radius:50%;background:#F1F3F4;color:#D93025;font-size:22px;font-weight:700;border:1px solid #E8EAED;box-sizing:border-box}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:12px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:90%;max-width:520px;margin-top:28px}.nh{font-size:12px;color:#5F6368;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.nw{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:8px;background:#F8F9FA;border:1px solid #E8EAED;border-radius:14px;color:#202124;text-decoration:none;font-size:14px;line-height:1.35}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:10px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
         const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
 
@@ -237,7 +244,13 @@ class MainActivity : Activity() {
         root.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)))
         root.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(bottom)
-        setContentView(root)
+        val frame = FrameLayout(this)
+        frame.addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        fullscreenHolder = FrameLayout(this)
+        fullscreenHolder.setBackgroundColor(Color.BLACK)
+        fullscreenHolder.visibility = View.GONE
+        frame.addView(fullscreenHolder, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        setContentView(frame)
     }
 
     private fun current(): Tab = tabs[cur]
@@ -361,6 +374,7 @@ class MainActivity : Activity() {
         s.allowContentAccess = false
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         s.safeBrowsingEnabled = true
+        s.setSupportMultipleWindows(true)
         s.userAgentString = if (tab.desktop) DESKTOP_UA else mobileUa
 
         web.webViewClient = object : WebViewClient() {
@@ -480,6 +494,45 @@ class MainActivity : Activity() {
                 }
             }
 
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null || customView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                customView = view
+                customCb = callback
+                fullscreenHolder.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                fullscreenHolder.visibility = View.VISIBLE
+                setImmersive(true)
+            }
+
+            override fun onHideCustomView() {
+                exitFullscreen()
+            }
+
+            override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
+                if (!isUserGesture || resultMsg == null) return false
+                val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+                val popup = try {
+                    createWebView(tab.priv)
+                } catch (e: Exception) {
+                    return false
+                }
+                val pt = Tab(popup, tab.priv)
+                pt.desktop = tab.desktop
+                setupWeb(pt)
+                tabs.add(pt)
+                switchTo(tabs.size - 1)
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                return true
+            }
+
+            override fun onCloseWindow(window: WebView?) {
+                val idx = tabs.indexOfFirst { it.web === window }
+                if (idx >= 0) closeTab(idx)
+            }
+
             override fun onPermissionRequest(request: PermissionRequest?) {
                 val req = request ?: return
                 runOnUiThread { askMediaPermission(req) }
@@ -496,26 +549,34 @@ class MainActivity : Activity() {
             }
         }
 
-        web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-            try {
-                val name = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                val req = DownloadManager.Request(Uri.parse(url))
-                req.setMimeType(mimeType)
-                req.addRequestHeader("User-Agent", userAgent)
-                val cm: CookieManager = if (tab.priv) {
-                    ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE).cookieManager
-                } else {
-                    CookieManager.getInstance()
+        web.setOnLongClickListener {
+            val r = web.hitTestResult
+            val extra = r.extra
+            when (r.type) {
+                WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                    if (extra != null) linkMenu(tab, extra, null)
+                    true
                 }
-                cm.getCookie(url)?.let { req.addRequestHeader("Cookie", it) }
-                req.setTitle(name)
-                req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-                (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-                toast("Downloading " + name)
-            } catch (e: Exception) {
-                toast("Download failed")
+                WebView.HitTestResult.IMAGE_TYPE -> {
+                    if (extra != null) linkMenu(tab, null, extra)
+                    true
+                }
+                WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                    val msg = Handler(Looper.getMainLooper()) { m ->
+                        val link = m.data.getString("url")
+                        val src = m.data.getString("src")
+                        if (link != null || src != null) linkMenu(tab, link, src)
+                        true
+                    }.obtainMessage()
+                    web.requestFocusNodeHref(msg)
+                    true
+                }
+                else -> false
             }
+        }
+
+        web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            startDownload(url, userAgent, contentDisposition, mimeType, tab.priv)
         }
     }
 
@@ -635,7 +696,13 @@ class MainActivity : Activity() {
         for (t in tiles) {
             val letter = t.first.trim().take(1).uppercase()
             sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
-            sb.append("<span class=\"ic\">").append(esc(letter)).append("</span>")
+            val host = Uri.parse(t.second).host ?: ""
+            sb.append("<span class=\"ic\">").append(esc(letter))
+            if (host.isNotEmpty()) {
+                sb.append("<img referrerpolicy=\"no-referrer\" src=\"https://www.google.com/s2/favicons?sz=128&amp;domain=")
+                sb.append(esc(Uri.encode(host))).append("\" onerror=\"this.style.display='none'\">")
+            }
+            sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
         sb.append("</div><div id=\"news\">")
@@ -700,7 +767,8 @@ class MainActivity : Activity() {
 
     private fun privateHtml(): String {
         return HEAD_A + esc(searchBase().substringBefore("?q=")) + HEAD_B +
-            "</div><div id=\"news\" style=\"text-align:center;color:#A89690;font-size:14px;line-height:1.5\">" +
+            "</div><style>body{background:#2A201B;color:#F3E9E4}h1{color:#E8909F}input{background:#372A24;color:#F3E9E4;border-color:#372A24}</style>" +
+            "<div id=\"news\" style=\"text-align:center;color:#A89690;font-size:14px;line-height:1.5\">" +
             "<b style=\"color:#E8909F\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.</div></body></html>"
     }
 
@@ -720,8 +788,8 @@ class MainActivity : Activity() {
 
     private fun feedName(): String = feeds.first { it.second == feedUrl() }.first
 
-    private fun fetchNews(feed: String): List<Pair<String, String>> {
-        val out = mutableListOf<Pair<String, String>>()
+    private fun fetchNews(feed: String): List<Triple<String, String, String>> {
+        val out = mutableListOf<Triple<String, String, String>>()
         val conn = URL(feed).openConnection() as HttpURLConnection
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
@@ -732,6 +800,7 @@ class MainActivity : Activity() {
             var inItem = false
             var title = ""
             var link = ""
+            var image = ""
             var tag = ""
             var ev = parser.eventType
             while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
@@ -741,10 +810,18 @@ class MainActivity : Activity() {
                         inItem = true
                         title = ""
                         link = ""
+                        image = ""
                     } else if (inItem && tag == "link") {
                         val rel = parser.getAttributeValue(null, "rel")
                         val href = parser.getAttributeValue(null, "href")
                         if (href != null && link.isEmpty() && (rel == null || rel == "alternate")) link = href
+                    } else if (inItem && (tag == "media:thumbnail" || tag == "media:content" || tag == "enclosure")) {
+                        val u = parser.getAttributeValue(null, "url")
+                        val type = parser.getAttributeValue(null, "type") ?: ""
+                        val medium = parser.getAttributeValue(null, "medium") ?: ""
+                        if (u != null && image.isEmpty() && (tag == "media:thumbnail" || type.startsWith("image") || medium == "image")) {
+                            image = u
+                        }
                     }
                 } else if (ev == XmlPullParser.TEXT) {
                     if (inItem) {
@@ -756,7 +833,7 @@ class MainActivity : Activity() {
                         inItem = false
                         val l = link.trim()
                         if (title.isNotBlank() && (l.startsWith("https://") || l.startsWith("http://"))) {
-                            out.add(Pair(title.trim(), l))
+                            out.add(Triple(title.trim(), l, image.trim()))
                         }
                     }
                     tag = ""
@@ -769,12 +846,17 @@ class MainActivity : Activity() {
         return out
     }
 
-    private fun buildNews(name: String, items: List<Pair<String, String>>): String {
+    private fun buildNews(name: String, items: List<Triple<String, String, String>>): String {
         val sb = StringBuilder()
         sb.append("<div class=\"nh\">Top news \u00B7 ").append(esc(name)).append("</div>")
         for (n in items) {
             sb.append("<a class=\"nw\" href=\"").append(esc(n.second)).append("\">")
-            sb.append(esc(n.first)).append("</a>")
+            sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
+            if (n.third.startsWith("http")) {
+                sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(n.third))
+                sb.append("\" onerror=\"this.style.display='none'\">")
+            }
+            sb.append("</a>")
         }
         return sb.toString()
     }
@@ -831,6 +913,97 @@ class MainActivity : Activity() {
                 val t = current()
                 if (t.url.isEmpty() && !t.priv) loadStart(t.web)
             }.show()
+    }
+
+    // ---- fullscreen video, long-press menu, downloads ----
+
+    private fun setImmersive(on: Boolean) {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = if (on) {
+            View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        } else {
+            View.SYSTEM_UI_FLAG_VISIBLE
+        }
+        requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
+    private fun exitFullscreen() {
+        val v = customView ?: return
+        fullscreenHolder.removeView(v)
+        fullscreenHolder.visibility = View.GONE
+        customView = null
+        customCb?.onCustomViewHidden()
+        customCb = null
+        setImmersive(false)
+    }
+
+    private fun isHttp(u: String): Boolean = u.startsWith("http://") || u.startsWith("https://")
+
+    private fun copyText(t: String) {
+        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("text", t))
+        toast("Copied")
+    }
+
+    private fun shareText(t: String) {
+        val send = Intent(Intent.ACTION_SEND)
+        send.type = "text/plain"
+        send.putExtra(Intent.EXTRA_TEXT, t)
+        startActivity(Intent.createChooser(send, "Share"))
+    }
+
+    private fun linkMenu(tab: Tab, link: String?, image: String?) {
+        val labels = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+        if (link != null) {
+            if (isHttp(link)) {
+                labels.add("Open in new tab")
+                actions.add { newTab(link, tab.priv) }
+            }
+            labels.add("Copy link")
+            actions.add { copyText(link) }
+            if (isHttp(link)) {
+                labels.add("Share link")
+                actions.add { shareText(link) }
+            }
+        }
+        if (image != null && isHttp(image)) {
+            labels.add("Open image in new tab")
+            actions.add { newTab(image, tab.priv) }
+            labels.add("Download image")
+            actions.add { startDownload(image, null, null, null, tab.priv) }
+            labels.add("Copy image address")
+            actions.add { copyText(image) }
+        }
+        if (labels.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle((link ?: image ?: "").take(60))
+            .setItems(labels.toTypedArray()) { _, i -> actions[i]() }
+            .show()
+    }
+
+    private fun startDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, priv: Boolean) {
+        try {
+            val name = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val req = DownloadManager.Request(Uri.parse(url))
+            if (mimeType != null) req.setMimeType(mimeType)
+            req.addRequestHeader("User-Agent", userAgent ?: mobileUa)
+            val cm: CookieManager = if (priv) {
+                ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE).cookieManager
+            } else {
+                CookieManager.getInstance()
+            }
+            cm.getCookie(url)?.let { req.addRequestHeader("Cookie", it) }
+            req.setTitle(name)
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
+            toast("Downloading " + name)
+        } catch (e: Exception) {
+            toast("Download failed")
+        }
     }
 
     // ---- storage (history and bookmarks) ----
@@ -999,6 +1172,10 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
+        if (customView != null) {
+            exitFullscreen()
+            return
+        }
         val t = current()
         if (t.web.canGoBack()) {
             t.web.goBack()
