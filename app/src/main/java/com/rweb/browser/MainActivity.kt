@@ -1,4 +1,4 @@
-package com.rweb.browser
+package app.rweb
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -15,6 +15,7 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -122,7 +123,7 @@ class MainActivity : Activity() {
     companion object {
         const val PRIVATE_PROFILE = "rwebprivate"
         const val DESKTOP_UA_FALLBACK = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#D93025;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#2A201B;--fg:#F3E9E4;--mute:#A89690;--card:#372A24;--fld:#372A24;--acc:#E8909F;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#D93025;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#2A201B;--fg:#F3E9E4;--mute:#A89690;--card:#372A24;--fld:#372A24;--acc:#E8909F;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
         const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
 
@@ -141,6 +142,7 @@ class MainActivity : Activity() {
         wipePrivate()
         buildUi()
         registerBackHandler()
+        askNotificationPermission()
         if (savedInstanceState != null) restoreTabs(savedInstanceState)
         if (tabs.isEmpty()) newTab(intent?.data?.toString())
     }
@@ -194,10 +196,45 @@ class MainActivity : Activity() {
         intent?.data?.let { newTab(it.toString()) }
     }
 
-    override fun onPause() {
+    // ---- background audio ----
+
+    private fun audioPlaying(): Boolean {
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        return am.isMusicActive
+    }
+
+    private fun startPlaybackService() {
         try {
-            currentOrNull()?.web?.onPause()
+            startForegroundService(Intent(this, PlaybackService::class.java))
         } catch (e: Exception) {
+        }
+    }
+
+    private fun stopPlaybackService() {
+        try {
+            stopService(Intent(this, PlaybackService::class.java))
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("asked_notif", false) &&
+            !has(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            prefs.edit().putBoolean("asked_notif", true).apply()
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 102)
+        }
+    }
+
+    override fun onPause() {
+        if (audioPlaying()) {
+            // Leave the page running and keep the process alive so audio continues.
+            startPlaybackService()
+        } else {
+            try {
+                currentOrNull()?.web?.onPause()
+            } catch (e: Exception) {
+            }
         }
         CookieManager.getInstance().flush()
         super.onPause()
@@ -205,6 +242,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        stopPlaybackService()
         try {
             currentOrNull()?.web?.onResume()
         } catch (e: Exception) {
@@ -212,6 +250,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        stopPlaybackService()
         val hadPrivate = tabs.any { it.priv }
         for (t in tabs) {
             try {
@@ -475,7 +514,7 @@ class MainActivity : Activity() {
         cur = i
         content.removeAllViews()
         val t = tabs[i]
-        if (prev != null && prev !== t) {
+        if (prev != null && prev !== t && !audioPlaying()) {
             try {
                 prev.web.onPause()
             } catch (e: Exception) {
@@ -906,7 +945,7 @@ class MainActivity : Activity() {
     private fun esc(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
-    // Tiles use letter icons only, so no third-party favicon service learns what you bookmark.
+    // Tiles show a letter first, then the site's icon (via Google's favicon service) on top once it loads.
     private fun startHtml(): String {
         val tiles = mutableListOf(
             Pair("Google", "https://www.google.com"),
@@ -925,7 +964,13 @@ class MainActivity : Activity() {
         for (t in tiles) {
             val letter = t.first.trim().take(1).uppercase()
             sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
-            sb.append("<span class=\"ic\">").append(esc(letter)).append("</span>")
+            val host = Uri.parse(t.second).host ?: ""
+            sb.append("<span class=\"ic\">").append(esc(letter))
+            if (host.isNotEmpty()) {
+                sb.append("<img referrerpolicy=\"no-referrer\" src=\"https://www.google.com/s2/favicons?sz=128&amp;domain=")
+                sb.append(esc(Uri.encode(host))).append("\" onerror=\"this.style.display='none'\">")
+            }
+            sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
         sb.append("</div><div id=\"news\">")
