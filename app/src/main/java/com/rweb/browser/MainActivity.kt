@@ -503,7 +503,7 @@ class MainActivity : Activity() {
                 customCb = callback
                 fullscreenHolder.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                 fullscreenHolder.visibility = View.VISIBLE
-                setImmersive(true)
+                setFullscreenMode(true)
             }
 
             override fun onHideCustomView() {
@@ -917,7 +917,7 @@ class MainActivity : Activity() {
 
     // ---- fullscreen video, long-press menu, downloads ----
 
-    private fun setImmersive(on: Boolean) {
+    private fun setFullscreenMode(on: Boolean) {
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = if (on) {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -936,7 +936,7 @@ class MainActivity : Activity() {
         customView = null
         customCb?.onCustomViewHidden()
         customCb = null
-        setImmersive(false)
+        setFullscreenMode(false)
     }
 
     private fun isHttp(u: String): Boolean = u.startsWith("http://") || u.startsWith("https://")
