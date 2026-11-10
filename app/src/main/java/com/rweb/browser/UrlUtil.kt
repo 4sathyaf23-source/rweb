@@ -1,4 +1,4 @@
-package com.rweb.browser
+package app.rweb
 
 import android.net.Uri
 
