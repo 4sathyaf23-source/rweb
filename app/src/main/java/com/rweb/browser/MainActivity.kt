@@ -24,7 +24,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.text.InputType
-import android.util.Xml
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -56,11 +55,7 @@ import android.window.OnBackInvokedDispatcher
 import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import org.json.JSONArray
 import org.json.JSONObject
-import org.xmlpull.v1.XmlPullParser
-import java.net.HttpURLConnection
-import java.net.URL
 
 class MainActivity : Activity() {
 
@@ -73,12 +68,12 @@ class MainActivity : Activity() {
         var pendingUrl: String? = null
     }
 
-    private val BG = Color.parseColor("#2A201B")
-    private val BAR = Color.parseColor("#372A24")
-    private val ROSE = Color.parseColor("#E8909F")
-    private val INK = Color.parseColor("#F3E9E4")
-    private val MUTE = Color.parseColor("#A89690")
-    private val PRIV = Color.parseColor("#33283A")
+    private val BG = Color.parseColor("#3A0A14")
+    private val BAR = Color.parseColor("#7A1022")
+    private val ROSE = Color.parseColor("#FF6B7D")
+    private val INK = Color.parseColor("#FFF1F3")
+    private val MUTE = Color.parseColor("#E3A9B1")
+    private val PRIV = Color.parseColor("#1A1230")
 
     private val tabs = mutableListOf<Tab>()
     private var cur = -1
@@ -88,6 +83,7 @@ class MainActivity : Activity() {
     private lateinit var tabBtn: TextView
     private lateinit var reloadBtn: TextView
     private lateinit var prefs: SharedPreferences
+    private lateinit var store: LinkStore
     private lateinit var mobileUa: String
     private lateinit var desktopUa: String
     private lateinit var topBar: LinearLayout
@@ -123,7 +119,7 @@ class MainActivity : Activity() {
     companion object {
         const val PRIVATE_PROFILE = "rwebprivate"
         const val DESKTOP_UA_FALLBACK = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#D93025;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#2A201B;--fg:#F3E9E4;--mute:#A89690;--card:#372A24;--fld:#372A24;--acc:#E8909F;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
         const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
 
@@ -133,6 +129,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
+        store = LinkStore(prefs)
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
         if (Build.VERSION.SDK_INT < 35) {
@@ -597,7 +594,7 @@ class MainActivity : Activity() {
         s.allowFileAccess = false
         s.allowContentAccess = false
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-        s.safeBrowsingEnabled = true
+        if (Build.VERSION.SDK_INT >= 26) s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         s.userAgentString = if (tab.desktop) desktopUa else mobileUa
 
@@ -1035,8 +1032,8 @@ class MainActivity : Activity() {
 
     private fun privateHtml(): String {
         return HEAD_A.replaceFirst("<html>", "<html class=\"dark\">") + esc(searchBase().substringBefore("?q=")) + HEAD_B +
-            "</div><div id=\"news\" style=\"text-align:center;color:#A89690;font-size:14px;line-height:1.5\">" +
-            "<b style=\"color:#E8909F\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
+            "</div><div id=\"news\" style=\"text-align:center;color:#E3A9B1;font-size:14px;line-height:1.5\">" +
+            "<b style=\"color:#FF6B7D\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
             "Bookmarks can't be saved from private tabs. Downloads go to app storage, not the public Downloads folder.</div></body></html>"
     }
 
@@ -1092,63 +1089,7 @@ class MainActivity : Activity() {
 
     private fun feedName(): String = feeds.first { it.second == feedUrl() }.first
 
-    private fun fetchNews(feed: String): List<Triple<String, String, String>> {
-        val out = mutableListOf<Triple<String, String, String>>()
-        val conn = URL(feed).openConnection() as HttpURLConnection
-        conn.connectTimeout = 8000
-        conn.readTimeout = 8000
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) rweb")
-        try {
-            val parser = Xml.newPullParser()
-            parser.setInput(conn.inputStream, null)
-            var inItem = false
-            var title = ""
-            var link = ""
-            var image = ""
-            var tag = ""
-            var ev = parser.eventType
-            while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
-                if (ev == XmlPullParser.START_TAG) {
-                    tag = parser.name
-                    if (tag == "item" || tag == "entry") {
-                        inItem = true
-                        title = ""
-                        link = ""
-                        image = ""
-                    } else if (inItem && tag == "link") {
-                        val rel = parser.getAttributeValue(null, "rel")
-                        val href = parser.getAttributeValue(null, "href")
-                        if (href != null && link.isEmpty() && (rel == null || rel == "alternate")) link = href
-                    } else if (inItem && (tag == "media:thumbnail" || tag == "media:content" || tag == "enclosure")) {
-                        val u = parser.getAttributeValue(null, "url")
-                        val type = parser.getAttributeValue(null, "type") ?: ""
-                        val medium = parser.getAttributeValue(null, "medium") ?: ""
-                        if (u != null && image.isEmpty() && (tag == "media:thumbnail" || type.startsWith("image") || medium == "image")) {
-                            image = u
-                        }
-                    }
-                } else if (ev == XmlPullParser.TEXT) {
-                    if (inItem) {
-                        if (tag == "title") title += parser.text
-                        else if (tag == "link" && link.isEmpty()) link += parser.text
-                    }
-                } else if (ev == XmlPullParser.END_TAG) {
-                    if (parser.name == "item" || parser.name == "entry") {
-                        inItem = false
-                        val l = link.trim()
-                        if (title.isNotBlank() && (l.startsWith("https://") || l.startsWith("http://"))) {
-                            out.add(Triple(title.trim(), l, image.trim()))
-                        }
-                    }
-                    tag = ""
-                }
-                ev = parser.next()
-            }
-        } finally {
-            conn.disconnect()
-        }
-        return out
-    }
+    private fun fetchNews(feed: String): List<Triple<String, String, String>> = NewsRepository.fetch(feed)
 
     private fun buildNews(name: String, items: List<Triple<String, String, String>>): String {
         val open = prefs.getBoolean("news_open", true)
@@ -1349,40 +1290,13 @@ class MainActivity : Activity() {
 
     // ---- storage (history and bookmarks) ----
 
-    private fun loadList(key: String): MutableList<Pair<String, String>> {
-        val out = mutableListOf<Pair<String, String>>()
-        try {
-            val arr = JSONArray(prefs.getString(key, "[]"))
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                out.add(Pair(o.getString("t"), o.getString("u")))
-            }
-        } catch (e: Exception) {
-        }
-        return out
-    }
+    private fun loadList(key: String): MutableList<Pair<String, String>> = store.load(key)
 
-    private fun saveList(key: String, list: List<Pair<String, String>>) {
-        val arr = JSONArray()
-        for (p in list) arr.put(JSONObject().put("t", p.first).put("u", p.second))
-        prefs.edit().putString(key, arr.toString()).apply()
-    }
+    private fun saveList(key: String, list: List<Pair<String, String>>) = store.save(key, list)
 
-    private fun addHistory(title: String, url: String) {
-        val l = loadList("history")
-        l.removeAll { it.second == url }
-        l.add(0, Pair(title, url))
-        saveList("history", l.take(200))
-    }
+    private fun addHistory(title: String, url: String) = store.addHistory(title, url)
 
-    private fun updateHistoryTitle(url: String, title: String) {
-        val l = loadList("history")
-        val idx = l.indexOfFirst { it.second == url }
-        if (idx >= 0 && l[idx].first != title) {
-            l[idx] = Pair(title, url)
-            saveList("history", l)
-        }
-    }
+    private fun updateHistoryTitle(url: String, title: String) = store.updateHistoryTitle(url, title)
 
     private fun addBookmark() {
         val t = current()
