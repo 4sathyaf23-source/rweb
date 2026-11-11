@@ -27,6 +27,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.os.Parcel
 import android.text.InputType
 import android.text.TextUtils
 import android.util.Xml
@@ -67,6 +68,7 @@ import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -79,6 +81,7 @@ class MainActivity : Activity() {
         var loading = false
         var lastHistoryUrl = ""
         var pendingUrl: String? = null
+        var savedState: Bundle? = null
     }
 
     private val BG = Color.parseColor("#3A0A14")
@@ -163,10 +166,12 @@ class MainActivity : Activity() {
             window.navigationBarColor = BAR
         }
         wipePrivate()
+        cleanPrivateDownloads()
         buildUi()
         registerBackHandler()
-        if (savedInstanceState != null) restoreTabs(savedInstanceState)
-        if (tabs.isEmpty()) newTab(intent?.data?.toString())
+        restoreSavedTabs()
+        val link = intent?.data?.toString()
+        if (link != null) newTab(link) else if (tabs.isEmpty()) newTab(null)
     }
 
     private fun buildDesktopUa(): String {
@@ -180,36 +185,93 @@ class MainActivity : Activity() {
 
     private fun currentOrNull(): Tab? = tabs.getOrNull(cur)
 
-    // Private tabs are never saved.
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        val normal = tabs.filter { !it.priv }
-        outState.putStringArray("tab_urls", normal.map { it.url }.toTypedArray())
-        outState.putStringArray("tab_titles", normal.map { it.title }.toTypedArray())
-        outState.putBooleanArray("tab_desktops", normal.map { it.desktop }.toBooleanArray())
-        val c = currentOrNull()
-        outState.putInt("cur_tab", if (c != null && !c.priv) normal.indexOf(c) else 0)
+    // ---- tab saving (normal tabs only, including their back/forward history) ----
+
+    private fun saveTabs() {
+        try {
+            val file = File(filesDir, "tabs.bin")
+            val normal = tabs.filter { !it.priv }
+            if (normal.isEmpty()) {
+                file.delete()
+                return
+            }
+            val b = Bundle()
+            b.putInt("n", normal.size)
+            val c = currentOrNull()
+            b.putInt("cur", if (c != null && !c.priv) normal.indexOf(c) else 0)
+            for (i in normal.indices) {
+                val t = normal[i]
+                b.putString("t" + i, t.title)
+                b.putString("u" + i, t.url)
+                b.putBoolean("d" + i, t.desktop)
+                // Tabs showing the start page have no page history worth keeping.
+                if (t.url.isNotEmpty() && t.savedState == null) {
+                    val st = Bundle()
+                    if (t.web.saveState(st) != null) b.putBundle("s" + i, st)
+                } else if (t.savedState != null) {
+                    b.putBundle("s" + i, t.savedState)
+                }
+            }
+            val p = Parcel.obtain()
+            try {
+                p.writeBundle(b)
+                file.writeBytes(p.marshall())
+            } finally {
+                p.recycle()
+            }
+        } catch (e: Exception) {
+        }
     }
 
-    private fun restoreTabs(b: Bundle) {
-        val urls = b.getStringArray("tab_urls") ?: return
-        val titles = b.getStringArray("tab_titles")
-        val desktops = b.getBooleanArray("tab_desktops")
-        for (i in urls.indices) {
-            val web = try {
-                createWebView(false)
-            } catch (e: Exception) {
-                continue
+    private fun restoreSavedTabs() {
+        try {
+            val file = File(filesDir, "tabs.bin")
+            if (!file.exists()) return
+            val bytes = file.readBytes()
+            val p = Parcel.obtain()
+            val loaded: Bundle? = try {
+                p.unmarshall(bytes, 0, bytes.size)
+                p.setDataPosition(0)
+                p.readBundle(MainActivity::class.java.classLoader)
+            } finally {
+                p.recycle()
             }
-            val tab = Tab(web, false)
-            tab.url = urls[i]
-            tab.title = titles?.getOrNull(i) ?: "New tab"
-            tab.desktop = desktops?.getOrNull(i) ?: false
-            tab.pendingUrl = urls[i]
-            setupWeb(tab)
-            tabs.add(tab)
+            if (loaded == null) return
+            val b: Bundle = loaded
+            val n = b.getInt("n")
+            for (i in 0 until n) {
+                val web = try {
+                    createWebView(false)
+                } catch (e: Exception) {
+                    continue
+                }
+                val tab = Tab(web, false)
+                tab.title = b.getString("t" + i) ?: "New tab"
+                tab.url = b.getString("u" + i) ?: ""
+                tab.desktop = b.getBoolean("d" + i)
+                val st = b.getBundle("s" + i)
+                if (st != null) tab.savedState = st else tab.pendingUrl = tab.url
+                setupWeb(tab)
+                tabs.add(tab)
+            }
+            if (tabs.isNotEmpty()) switchTo(b.getInt("cur").coerceIn(0, tabs.size - 1))
+        } catch (e: Exception) {
         }
-        if (tabs.isNotEmpty()) switchTo(b.getInt("cur_tab", 0).coerceIn(0, tabs.size - 1))
+    }
+
+    // Private downloads are tracked and removed when the last private tab closes.
+    private fun cleanPrivateDownloads() {
+        try {
+            val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            val ids = prefs.getStringSet("priv_dl", emptySet()) ?: emptySet()
+            for (id in ids) {
+                id.toLongOrNull()?.let { dm.remove(it) }
+            }
+            prefs.edit().remove("priv_dl").apply()
+            val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            dir?.listFiles()?.forEach { it.delete() }
+        } catch (e: Exception) {
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -293,6 +355,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
             }
         }
+        saveTabs()
         CookieManager.getInstance().flush()
         super.onPause()
     }
@@ -319,7 +382,10 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
             }
         }
-        if (hadPrivate) wipePrivate()
+        if (hadPrivate) {
+            wipePrivate()
+            cleanPrivateDownloads()
+        }
         super.onDestroy()
     }
 
@@ -680,6 +746,12 @@ class MainActivity : Activity() {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+        t.savedState?.let { st ->
+            t.savedState = null
+            if (t.web.restoreState(st) == null) {
+                if (t.url.isEmpty()) loadStart(t.web) else t.web.loadUrl(t.url)
+            }
+        }
         t.pendingUrl?.let {
             t.pendingUrl = null
             if (it.isEmpty()) loadStart(t.web) else t.web.loadUrl(it)
@@ -699,7 +771,10 @@ class MainActivity : Activity() {
             t.web.destroy()
         } catch (e: Exception) {
         }
-        if (t.priv && tabs.none { it.priv }) wipePrivate()
+        if (t.priv && tabs.none { it.priv }) {
+            wipePrivate()
+            cleanPrivateDownloads()
+        }
         when {
             tabs.isEmpty() -> {
                 cur = -1
@@ -1171,7 +1246,7 @@ class MainActivity : Activity() {
         return HEAD_A.replaceFirst("<html>", "<html class=\"dark\">") + esc(searchBase().substringBefore("?q=")) + HEAD_B +
             "</div><div id=\"news\" style=\"text-align:center;color:#E3A9B1;font-size:14px;line-height:1.5\">" +
             "<b style=\"color:#FF6B7D\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
-            "Bookmarks can't be saved from private tabs. Downloads go to app storage, not the public Downloads folder.</div></body></html>"
+            "Bookmarks can't be saved from private tabs. Downloads from private tabs are deleted when you close the last private tab.</div></body></html>"
     }
 
     private fun isDark(): Boolean = prefs.getString("home_theme", "light") == "dark"
@@ -1472,8 +1547,13 @@ class MainActivity : Activity() {
             } else {
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
             }
-            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-            toast(if (priv) "Downloading " + name + " (app storage)" else "Downloading " + name)
+            val id = (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
+            if (priv) {
+                val set = (prefs.getStringSet("priv_dl", emptySet()) ?: emptySet()).toMutableSet()
+                set.add(id.toString())
+                prefs.edit().putStringSet("priv_dl", set).apply()
+            }
+            toast(if (priv) "Downloading " + name + " (deleted when private tabs close)" else "Downloading " + name)
         } catch (e: Exception) {
             toast("Download failed")
         }
@@ -1902,7 +1982,9 @@ class MainActivity : Activity() {
             t.web.clearCache(true)
             t.web.clearFormData()
             t.web.clearSslPreferences()
+            if (!t.priv) t.web.clearHistory()
         }
+        File(filesDir, "tabs.bin").delete()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()
