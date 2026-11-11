@@ -1,9 +1,10 @@
-package app.rweb
+package com.rweb.browser
 
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Dialog
 import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -14,8 +15,11 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.media.AudioManager
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,10 +28,13 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.text.InputType
+import android.text.TextUtils
+import android.util.Xml
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -47,15 +54,21 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import org.json.JSONArray
 import org.json.JSONObject
+import org.xmlpull.v1.XmlPullParser
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : Activity() {
 
@@ -81,9 +94,10 @@ class MainActivity : Activity() {
     private lateinit var progress: ProgressBar
     private lateinit var content: FrameLayout
     private lateinit var tabBtn: TextView
-    private lateinit var reloadBtn: TextView
+    private lateinit var reloadBtn: ImageView
+    private lateinit var lockIcon: ImageView
+    private lateinit var bottomBg: GradientDrawable
     private lateinit var prefs: SharedPreferences
-    private lateinit var store: LinkStore
     private lateinit var mobileUa: String
     private lateinit var desktopUa: String
     private lateinit var topBar: LinearLayout
@@ -104,6 +118,18 @@ class MainActivity : Activity() {
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
+    // background audio
+    private val handler = Handler(Looper.getMainLooper())
+    private var mediaPlaying = false
+    private var inBackground = false
+    private var serviceOn = false
+    private val mediaPoll = object : Runnable {
+        override fun run() {
+            checkMedia()
+            handler.postDelayed(this, 3000)
+        }
+    }
+
     private val feeds = listOf(
         Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
         Pair("Google News", "https://news.google.com/rss"),
@@ -119,6 +145,7 @@ class MainActivity : Activity() {
     companion object {
         const val PRIVATE_PROFILE = "rwebprivate"
         const val DESKTOP_UA_FALLBACK = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
         const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
         const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
@@ -129,7 +156,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
-        store = LinkStore(prefs)
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
         if (Build.VERSION.SDK_INT < 35) {
@@ -139,7 +165,6 @@ class MainActivity : Activity() {
         wipePrivate()
         buildUi()
         registerBackHandler()
-        askNotificationPermission()
         if (savedInstanceState != null) restoreTabs(savedInstanceState)
         if (tabs.isEmpty()) newTab(intent?.data?.toString())
     }
@@ -194,16 +219,35 @@ class MainActivity : Activity() {
     }
 
     // ---- background audio ----
+    // While the app is open we check every few seconds whether the current page is playing audio or video.
+    // If it is when you leave the app, a foreground service keeps the process alive and the page is not paused.
 
-    private fun audioPlaying(): Boolean {
-        val am = getSystemService(AUDIO_SERVICE) as AudioManager
-        return am.isMusicActive
+    private fun checkMedia() {
+        val web = currentOrNull()?.web ?: return
+        try {
+            web.evaluateJavascript(AUDIO_JS) { r ->
+                val playing = r == "true"
+                mediaPlaying = playing
+                if (playing && !inBackground) maybeAskNotifications()
+                if (!playing && inBackground && serviceOn) {
+                    stopPlaybackService()
+                    try {
+                        web.onPause()
+                    } catch (e: Exception) {
+                    }
+                    handler.removeCallbacks(mediaPoll)
+                }
+            }
+        } catch (e: Exception) {
+        }
     }
 
     private fun startPlaybackService() {
-        try {
+        serviceOn = try {
             startForegroundService(Intent(this, PlaybackService::class.java))
+            true
         } catch (e: Exception) {
+            false
         }
     }
 
@@ -212,21 +256,37 @@ class MainActivity : Activity() {
             stopService(Intent(this, PlaybackService::class.java))
         } catch (e: Exception) {
         }
+        serviceOn = false
     }
 
-    private fun askNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("asked_notif", false) &&
-            !has(Manifest.permission.POST_NOTIFICATIONS)
-        ) {
-            prefs.edit().putBoolean("asked_notif", true).apply()
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 102)
-        }
+    private fun maybeAskNotifications() {
+        if (Build.VERSION.SDK_INT < 33 || prefs.getBoolean("asked_notif", false) ||
+            has(Manifest.permission.POST_NOTIFICATIONS)
+        ) return
+        prefs.edit().putBoolean("asked_notif", true).apply()
+        dlg()
+            .setTitle("Background audio")
+            .setMessage("Allow notifications so rweb can show when audio keeps playing in the background?")
+            .setPositiveButton("Continue") { _, _ ->
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 102)
+            }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 
     override fun onPause() {
-        if (audioPlaying()) {
-            // Leave the page running and keep the process alive so audio continues.
+        inBackground = true
+        handler.removeCallbacks(mediaPoll)
+        if (mediaPlaying && !isFinishing) {
             startPlaybackService()
+            if (serviceOn) {
+                handler.postDelayed(mediaPoll, 3000)
+            } else {
+                try {
+                    currentOrNull()?.web?.onPause()
+                } catch (e: Exception) {
+                }
+            }
         } else {
             try {
                 currentOrNull()?.web?.onPause()
@@ -239,14 +299,18 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        inBackground = false
         stopPlaybackService()
         try {
             currentOrNull()?.web?.onResume()
         } catch (e: Exception) {
         }
+        handler.removeCallbacks(mediaPoll)
+        handler.post(mediaPoll)
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(mediaPoll)
         stopPlaybackService()
         val hadPrivate = tabs.any { it.priv }
         for (t in tabs) {
@@ -330,26 +394,37 @@ class MainActivity : Activity() {
         statusSpacer = View(this)
         statusSpacer.setBackgroundColor(BAR)
         navSpacer = View(this)
-        navSpacer.setBackgroundColor(BAR)
+        navSpacer.setBackgroundColor(BG)
 
         topBar = LinearLayout(this)
         val top = topBar
         top.orientation = LinearLayout.HORIZONTAL
         top.gravity = Gravity.CENTER_VERTICAL
         top.setBackgroundColor(BAR)
-        top.setPadding(dp(8), dp(6), dp(4), dp(6))
+        top.setPadding(dp(12), dp(8), dp(12), dp(10))
 
-        address = EditText(this)
+        // Address pill: [security icon] [address] [reload / stop]
+        val pillBox = LinearLayout(this)
+        pillBox.orientation = LinearLayout.HORIZONTAL
+        pillBox.gravity = Gravity.CENTER_VERTICAL
         val pill = GradientDrawable()
         pill.setColor(BG)
-        pill.cornerRadius = dp(22).toFloat()
-        address.background = pill
+        pill.cornerRadius = dp(24).toFloat()
+        pillBox.background = pill
+
+        lockIcon = icon("search", MUTE)
+        val lockLp = LinearLayout.LayoutParams(dp(18), dp(18))
+        lockLp.leftMargin = dp(14)
+        pillBox.addView(lockIcon, lockLp)
+
+        address = EditText(this)
+        address.background = null
         address.setSingleLine()
         address.hint = "Search or enter address"
         address.setHintTextColor(MUTE)
         address.setTextColor(INK)
         address.textSize = 15f
-        address.setPadding(dp(16), dp(10), dp(16), dp(10))
+        address.setPadding(dp(10), dp(12), dp(6), dp(12))
         address.imeOptions = EditorInfo.IME_ACTION_GO
         address.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         address.setSelectAllOnFocus(true)
@@ -363,12 +438,18 @@ class MainActivity : Activity() {
                 false
             }
         }
-        top.addView(address, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        pillBox.addView(address, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        tabBtn = btn("1", "Tabs") { showTabs() }
-        tabBtn.textSize = 16f
-        top.addView(tabBtn)
-        top.addView(btn("\u22EE", "Menu") { showMenu() })
+        reloadBtn = icon("reload", INK)
+        reloadBtn.setPadding(dp(10), dp(10), dp(10), dp(10))
+        reloadBtn.contentDescription = "Reload"
+        reloadBtn.background = ripple()
+        reloadBtn.setOnClickListener { reloadOrStop() }
+        val reloadLp = LinearLayout.LayoutParams(dp(42), dp(42))
+        reloadLp.rightMargin = dp(4)
+        pillBox.addView(reloadBtn, reloadLp)
+
+        top.addView(pillBox, LinearLayout.LayoutParams(0, dp(46), 1f))
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
         progress.max = 100
@@ -377,21 +458,57 @@ class MainActivity : Activity() {
 
         content = FrameLayout(this)
 
-        val bottom = LinearLayout(this)
-        bottom.orientation = LinearLayout.HORIZONTAL
-        bottom.setBackgroundColor(BAR)
-        val w = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        bottom.addView(btn("\u25C0", "Back") { currentOrNull()?.web?.let { if (it.canGoBack()) it.goBack() } }, w)
-        bottom.addView(btn("\u25B6", "Forward") { currentOrNull()?.web?.let { if (it.canGoForward()) it.goForward() } }, w)
-        reloadBtn = btn("\u27F3", "Reload") { reloadOrStop() }
-        bottom.addView(reloadBtn, w)
-        bottom.addView(btn("\u2302", "Home") { currentOrNull()?.let { loadStart(it.web) } }, w)
+        // Floating bottom bar: back, forward, home, tabs, menu
+        bottomBg = GradientDrawable()
+        bottomBg.setColor(BAR)
+        bottomBg.cornerRadius = dp(28).toFloat()
+        val island = LinearLayout(this)
+        island.orientation = LinearLayout.HORIZONTAL
+        island.gravity = Gravity.CENTER_VERTICAL
+        island.background = bottomBg
+        island.elevation = dp(8).toFloat()
+        island.setPadding(dp(6), dp(4), dp(6), dp(4))
+
+        island.addView(
+            cell(icon("back", INK), 24, "Back") { currentOrNull()?.web?.let { if (it.canGoBack()) it.goBack() } },
+            LinearLayout.LayoutParams(0, dp(48), 1f)
+        )
+        island.addView(
+            cell(icon("forward", INK), 24, "Forward") { currentOrNull()?.web?.let { if (it.canGoForward()) it.goForward() } },
+            LinearLayout.LayoutParams(0, dp(48), 1f)
+        )
+        island.addView(
+            cell(icon("home", INK), 24, "Home") { currentOrNull()?.let { loadStart(it.web) } },
+            LinearLayout.LayoutParams(0, dp(48), 1f)
+        )
+        tabBtn = TextView(this)
+        tabBtn.text = "1"
+        tabBtn.textSize = 12f
+        tabBtn.setTypeface(tabBtn.typeface, Typeface.BOLD)
+        tabBtn.setTextColor(INK)
+        tabBtn.gravity = Gravity.CENTER
+        val tabBox = GradientDrawable()
+        tabBox.setColor(Color.TRANSPARENT)
+        tabBox.setStroke(dp(2), INK)
+        tabBox.cornerRadius = dp(7).toFloat()
+        tabBtn.background = tabBox
+        island.addView(cell(tabBtn, 26, "Tabs") { showTabs() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        island.addView(
+            cell(icon("menu", INK), 24, "Menu") { showMenu() },
+            LinearLayout.LayoutParams(0, dp(48), 1f)
+        )
+
+        val islandWrap = FrameLayout(this)
+        islandWrap.clipChildren = false
+        islandWrap.clipToPadding = false
+        islandWrap.setPadding(dp(14), dp(6), dp(14), dp(8))
+        islandWrap.addView(island, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         root.addView(statusSpacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
         root.addView(top)
         root.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)))
         root.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(bottom)
+        root.addView(islandWrap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(navSpacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
 
         val frame = FrameLayout(this)
@@ -442,8 +559,24 @@ class MainActivity : Activity() {
 
     private fun updateReloadButton() {
         val loading = currentOrNull()?.loading == true
-        reloadBtn.text = if (loading) "\u2715" else "\u27F3"
+        reloadBtn.setImageDrawable(IconDrawable(if (loading) "close" else "reload", INK))
         reloadBtn.contentDescription = if (loading) "Stop" else "Reload"
+        updateLock()
+    }
+
+    private fun updateLock() {
+        val t = currentOrNull() ?: return
+        var color = MUTE
+        val kind = when {
+            t.url.startsWith("https://") -> "lock"
+            t.url.startsWith("http://") -> {
+                color = Color.parseColor("#FFB74D")
+                "warning"
+            }
+            t.priv -> "shield"
+            else -> "search"
+        }
+        lockIcon.setImageDrawable(IconDrawable(kind, color))
     }
 
     private fun reloadOrStop() {
@@ -511,7 +644,7 @@ class MainActivity : Activity() {
         cur = i
         content.removeAllViews()
         val t = tabs[i]
-        if (prev != null && prev !== t && !audioPlaying()) {
+        if (prev != null && prev !== t) {
             try {
                 prev.web.onPause()
             } catch (e: Exception) {
@@ -527,6 +660,7 @@ class MainActivity : Activity() {
         val barColor = if (t.priv) PRIV else BAR
         topBar.setBackgroundColor(barColor)
         statusSpacer.setBackgroundColor(barColor)
+        bottomBg.setColor(barColor)
         address.hint = if (t.priv) "Private tab: search or enter address" else "Search or enter address"
         if (lastPrivUi != t.priv) {
             lastPrivUi = t.priv
@@ -594,7 +728,7 @@ class MainActivity : Activity() {
         s.allowFileAccess = false
         s.allowContentAccess = false
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-        if (Build.VERSION.SDK_INT >= 26) s.safeBrowsingEnabled = true
+        s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         s.userAgentString = if (tab.desktop) desktopUa else mobileUa
 
@@ -678,7 +812,7 @@ class MainActivity : Activity() {
                 handler?.cancel()
                 val failing = error?.url
                 if (failing != null && failing == view?.url) {
-                    AlertDialog.Builder(this@MainActivity)
+                    dlg()
                         .setTitle("Connection not secure")
                         .setMessage("This site's security certificate isn't valid, so rweb blocked it.")
                         .setPositiveButton("OK", null)
@@ -854,7 +988,7 @@ class MainActivity : Activity() {
             return
         }
         val what = if (cam && mic) "camera and microphone" else if (cam) "camera" else "microphone"
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle("Allow " + what + "?")
             .setMessage(req.origin.host + " wants to use your " + what + ".")
             .setPositiveButton("Allow") { _, _ -> grantMedia(req, cam, mic) }
@@ -886,7 +1020,7 @@ class MainActivity : Activity() {
     }
 
     private fun askLocation(origin: String, cb: GeolocationPermissions.Callback) {
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle("Allow location?")
             .setMessage(Uri.parse(origin).host.toString() + " wants to know your location.")
             .setPositiveButton("Allow") { _, _ ->
@@ -930,7 +1064,7 @@ class MainActivity : Activity() {
     private fun chooseEngine() {
         val names = engines.map { it.first }.toTypedArray()
         val idx = engines.indexOfFirst { it.second == searchBase() }.coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle("Search engine")
             .setSingleChoiceItems(names, idx) { d, i ->
                 prefs.edit().putString("search", engines[i].second).apply()
@@ -942,7 +1076,9 @@ class MainActivity : Activity() {
     private fun esc(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
-    // Tiles show a letter first, then the site's icon (via Google's favicon service) on top once it loads.
+    private fun siteIcons(): Boolean = prefs.getBoolean("icons", true)
+
+    // Tiles show a letter first. With site icons on, the icon (from Google's favicon service) loads on top of it.
     private fun startHtml(): String {
         val tiles = mutableListOf(
             Pair("Google", "https://www.google.com"),
@@ -955,6 +1091,7 @@ class MainActivity : Activity() {
                 tiles.add(Pair(if (b.first.isBlank()) b.second else b.first, b.second))
             }
         }
+        val icons = siteIcons()
         val sb = StringBuilder()
         sb.append(HEAD_A.replaceFirst("<html>", if (isDark()) "<html class=\"dark\">" else "<html>"))
         sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B)
@@ -963,7 +1100,7 @@ class MainActivity : Activity() {
             sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
             val host = Uri.parse(t.second).host ?: ""
             sb.append("<span class=\"ic\">").append(esc(letter))
-            if (host.isNotEmpty()) {
+            if (icons && host.isNotEmpty()) {
                 sb.append("<img referrerpolicy=\"no-referrer\" src=\"https://www.google.com/s2/favicons?sz=128&amp;domain=")
                 sb.append(esc(Uri.encode(host))).append("\" onerror=\"this.style.display='none'\">")
             }
@@ -1000,7 +1137,7 @@ class MainActivity : Activity() {
         val input = EditText(this)
         input.setSingleLine()
         input.hint = "Find in page"
-        val dlg = AlertDialog.Builder(this)
+        val dlg = dlg()
             .setTitle("Find in page")
             .setView(input)
             .setPositiveButton("Find", null)
@@ -1051,6 +1188,13 @@ class MainActivity : Activity() {
         toast(if (dark) "Homepage: dark" else "Homepage: light")
     }
 
+    private fun toggleIcons() {
+        val on = !siteIcons()
+        prefs.edit().putBoolean("icons", on).apply()
+        reloadStartIfShown()
+        toast(if (on) "Site icons on" else "Site icons off")
+    }
+
     private fun toggleNewsFold() {
         val open = !prefs.getBoolean("news_open", true)
         prefs.edit().putBoolean("news_open", open).apply()
@@ -1089,7 +1233,63 @@ class MainActivity : Activity() {
 
     private fun feedName(): String = feeds.first { it.second == feedUrl() }.first
 
-    private fun fetchNews(feed: String): List<Triple<String, String, String>> = NewsRepository.fetch(feed)
+    private fun fetchNews(feed: String): List<Triple<String, String, String>> {
+        val out = mutableListOf<Triple<String, String, String>>()
+        val conn = URL(feed).openConnection() as HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) rweb")
+        try {
+            val parser = Xml.newPullParser()
+            parser.setInput(conn.inputStream, null)
+            var inItem = false
+            var title = ""
+            var link = ""
+            var image = ""
+            var tag = ""
+            var ev = parser.eventType
+            while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
+                if (ev == XmlPullParser.START_TAG) {
+                    tag = parser.name
+                    if (tag == "item" || tag == "entry") {
+                        inItem = true
+                        title = ""
+                        link = ""
+                        image = ""
+                    } else if (inItem && tag == "link") {
+                        val rel = parser.getAttributeValue(null, "rel")
+                        val href = parser.getAttributeValue(null, "href")
+                        if (href != null && link.isEmpty() && (rel == null || rel == "alternate")) link = href
+                    } else if (inItem && (tag == "media:thumbnail" || tag == "media:content" || tag == "enclosure")) {
+                        val u = parser.getAttributeValue(null, "url")
+                        val type = parser.getAttributeValue(null, "type") ?: ""
+                        val medium = parser.getAttributeValue(null, "medium") ?: ""
+                        if (u != null && image.isEmpty() && (tag == "media:thumbnail" || type.startsWith("image") || medium == "image")) {
+                            image = u
+                        }
+                    }
+                } else if (ev == XmlPullParser.TEXT) {
+                    if (inItem) {
+                        if (tag == "title") title += parser.text
+                        else if (tag == "link" && link.isEmpty()) link += parser.text
+                    }
+                } else if (ev == XmlPullParser.END_TAG) {
+                    if (parser.name == "item" || parser.name == "entry") {
+                        inItem = false
+                        val l = link.trim()
+                        if (title.isNotBlank() && (l.startsWith("https://") || l.startsWith("http://"))) {
+                            out.add(Triple(title.trim(), l, image.trim()))
+                        }
+                    }
+                    tag = ""
+                }
+                ev = parser.next()
+            }
+        } finally {
+            conn.disconnect()
+        }
+        return out
+    }
 
     private fun buildNews(name: String, items: List<Triple<String, String, String>>): String {
         val open = prefs.getBoolean("news_open", true)
@@ -1156,7 +1356,7 @@ class MainActivity : Activity() {
     private fun chooseNews() {
         val names = feeds.map { it.first }.toTypedArray()
         val idx = feeds.indexOfFirst { it.second == feedUrl() }.coerceAtLeast(0)
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle("News source")
             .setSingleChoiceItems(names, idx) { d, i ->
                 prefs.edit().putString("news", feeds[i].second).apply()
@@ -1244,7 +1444,7 @@ class MainActivity : Activity() {
             actions.add { copyText(image) }
         }
         if (labels.isEmpty()) return
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle((link ?: image ?: "").take(60))
             .setItems(labels.toTypedArray()) { _, i -> actions[i]() }
             .show()
@@ -1280,7 +1480,7 @@ class MainActivity : Activity() {
     }
 
     private fun confirm(title: String, msg: String, action: () -> Unit) {
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle(title)
             .setMessage(msg)
             .setPositiveButton("Clear") { _, _ -> action() }
@@ -1288,15 +1488,212 @@ class MainActivity : Activity() {
             .show()
     }
 
+    // ---- UI building blocks ----
+
+    private val SHEET = Color.parseColor("#2A0710")
+
+    private fun dlg(): AlertDialog.Builder =
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+
+    private fun ripple(): Drawable = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), null, null)
+
+    private fun icon(kind: String, color: Int): ImageView {
+        val iv = ImageView(this)
+        iv.setImageDrawable(IconDrawable(kind, color))
+        iv.scaleType = ImageView.ScaleType.FIT_CENTER
+        return iv
+    }
+
+    // A tappable cell for the bottom bar. The child is centred at sizeDp x sizeDp.
+    private fun cell(child: View, sizeDp: Int, desc: String, onClick: () -> Unit): FrameLayout {
+        val c = FrameLayout(this)
+        c.contentDescription = desc
+        c.background = ripple()
+        c.setOnClickListener { onClick() }
+        c.addView(child, FrameLayout.LayoutParams(dp(sizeDp), dp(sizeDp), Gravity.CENTER))
+        return c
+    }
+
+    private fun newSheet(heightPx: Int): Pair<Dialog, LinearLayout> {
+        val d = Dialog(this)
+        d.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        val bg = GradientDrawable()
+        bg.setColor(SHEET)
+        val r = dp(24).toFloat()
+        bg.cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+        box.background = bg
+        box.setPadding(dp(16), dp(10), dp(16), dp(20))
+        d.setContentView(box)
+        val w = d.window
+        if (w != null) {
+            w.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, heightPx)
+            w.setGravity(Gravity.BOTTOM)
+        }
+        return Pair(d, box)
+    }
+
+    private fun sheetHandle(box: LinearLayout) {
+        val h = View(this)
+        val bg = GradientDrawable()
+        bg.setColor(0x4DFFFFFF)
+        bg.cornerRadius = dp(2).toFloat()
+        h.background = bg
+        val lp = LinearLayout.LayoutParams(dp(40), dp(4))
+        lp.gravity = Gravity.CENTER_HORIZONTAL
+        lp.bottomMargin = dp(14)
+        box.addView(h, lp)
+    }
+
+    private fun quickAction(kind: String, label: String, onClick: () -> Unit): View {
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.gravity = Gravity.CENTER_HORIZONTAL
+        col.setOnClickListener { onClick() }
+        val circle = FrameLayout(this)
+        val bg = GradientDrawable()
+        bg.shape = GradientDrawable.OVAL
+        bg.setColor(BAR)
+        circle.background = bg
+        circle.addView(icon(kind, INK), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+        col.addView(circle, LinearLayout.LayoutParams(dp(54), dp(54)))
+        val tv = TextView(this)
+        tv.text = label
+        tv.textSize = 12f
+        tv.setTextColor(MUTE)
+        tv.gravity = Gravity.CENTER
+        tv.setPadding(0, dp(6), 0, 0)
+        col.addView(tv)
+        return col
+    }
+
+    private fun sheetRow(label: String, value: String?, danger: Boolean, onClick: () -> Unit): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.minimumHeight = dp(48)
+        row.setPadding(dp(4), 0, dp(4), 0)
+        row.background = ripple()
+        row.setOnClickListener { onClick() }
+        val l = TextView(this)
+        l.text = label
+        l.textSize = 15f
+        l.setTextColor(if (danger) ROSE else INK)
+        row.addView(l, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (value != null) {
+            val v = TextView(this)
+            v.text = value
+            v.textSize = 13f
+            v.setTextColor(MUTE)
+            row.addView(v)
+        }
+        return row
+    }
+
+    private fun pillButton(label: String, primary: Boolean, onClick: () -> Unit): TextView {
+        val b = TextView(this)
+        b.text = label
+        b.textSize = 14f
+        b.setTypeface(b.typeface, Typeface.BOLD)
+        b.gravity = Gravity.CENTER
+        b.setTextColor(if (primary) BG else INK)
+        val bg = GradientDrawable()
+        bg.setColor(if (primary) ROSE else BAR)
+        bg.cornerRadius = dp(23).toFloat()
+        b.background = bg
+        b.setOnClickListener { onClick() }
+        return b
+    }
+
+    private fun tabRow(t: Tab, isCur: Boolean, onSelect: () -> Unit, onClose: () -> Unit): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        val bg = GradientDrawable()
+        bg.setColor(if (t.priv) PRIV else BAR)
+        bg.cornerRadius = dp(16).toFloat()
+        if (isCur) bg.setStroke(dp(2), ROSE)
+        row.background = bg
+        row.setPadding(dp(12), dp(10), dp(4), dp(10))
+        row.setOnClickListener { onSelect() }
+
+        val badge = TextView(this)
+        badge.gravity = Gravity.CENTER
+        badge.textSize = 15f
+        badge.setTextColor(INK)
+        val circle = GradientDrawable()
+        circle.shape = GradientDrawable.OVAL
+        circle.setColor(BG)
+        badge.background = circle
+        badge.text = if (t.priv) "P" else t.title.trim().take(1).uppercase().ifEmpty { "N" }
+        row.addView(badge, LinearLayout.LayoutParams(dp(36), dp(36)))
+
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(12), 0, dp(8), 0)
+        val name = TextView(this)
+        name.text = if (t.title.isBlank()) "New tab" else t.title
+        name.textSize = 14f
+        name.setTextColor(INK)
+        name.maxLines = 1
+        name.ellipsize = TextUtils.TruncateAt.END
+        val sub = TextView(this)
+        sub.text = (if (t.priv) "Private \u00B7 " else "") + (Uri.parse(t.url).host ?: "Start page")
+        sub.textSize = 12f
+        sub.setTextColor(MUTE)
+        sub.maxLines = 1
+        sub.ellipsize = TextUtils.TruncateAt.END
+        col.addView(name)
+        col.addView(sub)
+        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val x = icon("close", INK)
+        x.setPadding(dp(12), dp(12), dp(12), dp(12))
+        x.contentDescription = "Close tab"
+        x.background = ripple()
+        x.setOnClickListener { onClose() }
+        row.addView(x, LinearLayout.LayoutParams(dp(44), dp(44)))
+        return row
+    }
+
     // ---- storage (history and bookmarks) ----
 
-    private fun loadList(key: String): MutableList<Pair<String, String>> = store.load(key)
+    private fun loadList(key: String): MutableList<Pair<String, String>> {
+        val out = mutableListOf<Pair<String, String>>()
+        try {
+            val arr = JSONArray(prefs.getString(key, "[]"))
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                out.add(Pair(o.getString("t"), o.getString("u")))
+            }
+        } catch (e: Exception) {
+        }
+        return out
+    }
 
-    private fun saveList(key: String, list: List<Pair<String, String>>) = store.save(key, list)
+    private fun saveList(key: String, list: List<Pair<String, String>>) {
+        val arr = JSONArray()
+        for (p in list) arr.put(JSONObject().put("t", p.first).put("u", p.second))
+        prefs.edit().putString(key, arr.toString()).apply()
+    }
 
-    private fun addHistory(title: String, url: String) = store.addHistory(title, url)
+    private fun addHistory(title: String, url: String) {
+        val l = loadList("history")
+        l.removeAll { it.second == url }
+        l.add(0, Pair(title, url))
+        saveList("history", l.take(200))
+    }
 
-    private fun updateHistoryTitle(url: String, title: String) = store.updateHistoryTitle(url, title)
+    private fun updateHistoryTitle(url: String, title: String) {
+        val l = loadList("history")
+        val idx = l.indexOfFirst { it.second == url }
+        if (idx >= 0 && l[idx].first != title) {
+            l[idx] = Pair(title, url)
+            saveList("history", l)
+        }
+    }
 
     private fun addBookmark() {
         val t = current()
@@ -1327,7 +1724,7 @@ class MainActivity : Activity() {
             return
         }
         val labels = l.map { (if (it.first.isBlank()) it.second else it.first) + "\n" + it.second }.toTypedArray()
-        val b = AlertDialog.Builder(this).setTitle(title)
+        val b = dlg().setTitle(title)
             .setItems(labels) { _, i -> pickItem(key, l[i]) }
         if (key == "history") {
             b.setNeutralButton("Clear all") { _, _ ->
@@ -1341,7 +1738,7 @@ class MainActivity : Activity() {
     }
 
     private fun pickItem(key: String, item: Pair<String, String>) {
-        AlertDialog.Builder(this)
+        dlg()
             .setTitle(item.first.take(40))
             .setItems(arrayOf("Open", "Open in new tab", "Delete")) { _, which ->
                 when (which) {
@@ -1358,57 +1755,126 @@ class MainActivity : Activity() {
     }
 
     private fun showTabs() {
-        val labels = tabs.mapIndexed { i, t ->
-            (if (i == cur) "\u25CF " else "    ") + (if (t.priv) "(Private) " else "") + (if (t.title.isBlank()) "New tab" else t.title)
-        }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Tabs (" + tabs.size + ")")
-            .setItems(labels) { _, i -> switchTo(i) }
-            .setPositiveButton("New tab") { _, _ -> newTab(null) }
-            .setNeutralButton("Close this tab") { _, _ -> closeTab(cur) }
-            .setNegativeButton("New private tab") { _, _ -> newTab(null, true) }
-            .show()
+        val screenH = resources.displayMetrics.heightPixels
+        val (d, box) = newSheet((screenH * 0.7).toInt())
+        sheetHandle(box)
+        val title = TextView(this)
+        title.textSize = 16f
+        title.setTextColor(INK)
+        title.setTypeface(title.typeface, Typeface.BOLD)
+        title.setPadding(dp(4), dp(4), dp(4), dp(10))
+        box.addView(title)
+
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        scroll.addView(list)
+        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        fun render() {
+            list.removeAllViews()
+            title.text = "Tabs (" + tabs.size + ")"
+            for (i in tabs.indices) {
+                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                lp.bottomMargin = dp(8)
+                list.addView(
+                    tabRow(tabs[i], i == cur, {
+                        d.dismiss()
+                        switchTo(i)
+                    }, {
+                        closeTab(i)
+                        render()
+                    }),
+                    lp
+                )
+            }
+        }
+        render()
+
+        val actions = LinearLayout(this)
+        actions.orientation = LinearLayout.HORIZONTAL
+        val leftLp = LinearLayout.LayoutParams(0, dp(46), 1f)
+        leftLp.rightMargin = dp(8)
+        actions.addView(pillButton("New tab", true) {
+            d.dismiss()
+            newTab(null)
+        }, leftLp)
+        actions.addView(pillButton("New private tab", false) {
+            d.dismiss()
+            newTab(null, true)
+        }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        val actionsLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        actionsLp.topMargin = dp(8)
+        box.addView(actions, actionsLp)
+        d.show()
     }
 
+    private class MenuRow(val label: String, val value: String?, val danger: Boolean, val action: () -> Unit)
+
     private fun showMenu() {
-        val items = arrayOf(
-            "New tab",
-            "New private tab",
-            "Bookmark this page",
-            "Bookmarks",
-            "History",
-            "Downloads",
-            "Find in page",
-            "Search engine: " + engines.first { it.second == searchBase() }.first,
-            "News source: " + feedName(),
-            "Homepage news: " + (if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed"),
-            "Homepage theme: " + (if (isDark()) "Dark" else "Light"),
-            "Third-party cookies: " + (if (thirdPartyCookies()) "Allowed" else "Blocked"),
-            if (current().desktop) "Desktop site: ON" else "Desktop site: OFF",
-            "Copy link",
-            "Share page",
-            "Clear browsing data"
-        )
-        AlertDialog.Builder(this).setItems(items) { _, i ->
-            when (i) {
-                0 -> newTab(null)
-                1 -> newTab(null, true)
-                2 -> addBookmark()
-                3 -> showList("Bookmarks", "bookmarks")
-                4 -> showList("History", "history")
-                5 -> openDownloads()
-                6 -> findInPage()
-                7 -> chooseEngine()
-                8 -> chooseNews()
-                9 -> toggleNewsFold()
-                10 -> toggleHomeTheme()
-                11 -> toggleThirdPartyCookies()
-                12 -> toggleDesktop()
-                13 -> copyLink()
-                14 -> sharePage()
-                15 -> confirm("Clear browsing data?", "This deletes history, cookies, cache and saved site data, and signs you out of websites.") { clearData() }
+        val t = current()
+        val rows = listOf(
+            MenuRow("Bookmarks", null, false) { showList("Bookmarks", "bookmarks") },
+            MenuRow("History", null, false) { showList("History", "history") },
+            MenuRow("Downloads", null, false) { openDownloads() },
+            MenuRow("Find in page", null, false) { findInPage() },
+            MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
+            MenuRow("News source", feedName(), false) { chooseNews() },
+            MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
+            MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
+            MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false) { toggleIcons() },
+            MenuRow("Third-party cookies", if (thirdPartyCookies()) "Allowed" else "Blocked", false) { toggleThirdPartyCookies() },
+            MenuRow("Desktop site", if (t.desktop) "On" else "Off", false) { toggleDesktop() },
+            MenuRow("Copy link", null, false) { copyLink() },
+            MenuRow("Clear browsing data", null, true) {
+                confirm(
+                    "Clear browsing data?",
+                    "This deletes history, cookies, cache and saved site data, and signs you out of websites."
+                ) { clearData() }
             }
-        }.show()
+        )
+        val screenH = resources.displayMetrics.heightPixels
+        val h = minOf(dp(170 + rows.size * 49), (screenH * 0.85).toInt())
+        val (d, box) = newSheet(h)
+        sheetHandle(box)
+
+        val quick = LinearLayout(this)
+        quick.orientation = LinearLayout.HORIZONTAL
+        quick.setPadding(0, dp(4), 0, dp(12))
+        val qLp = { LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f) }
+        quick.addView(quickAction("plus", "New tab") {
+            d.dismiss()
+            newTab(null)
+        }, qLp())
+        quick.addView(quickAction("shield", "Private") {
+            d.dismiss()
+            newTab(null, true)
+        }, qLp())
+        quick.addView(quickAction("star", "Bookmark") {
+            d.dismiss()
+            addBookmark()
+        }, qLp())
+        quick.addView(quickAction("share", "Share") {
+            d.dismiss()
+            sharePage()
+        }, qLp())
+        box.addView(quick)
+
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        for (r in rows) {
+            val divider = View(this)
+            divider.setBackgroundColor(0x1AFFFFFF)
+            list.addView(divider, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)))
+            list.addView(sheetRow(r.label, r.value, r.danger) {
+                d.dismiss()
+                r.action()
+            })
+        }
+        scroll.addView(list)
+        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        d.show()
     }
 
     private fun toggleDesktop() {
