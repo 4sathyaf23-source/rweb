@@ -8,6 +8,7 @@ import android.app.Dialog
 import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
@@ -28,6 +29,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.os.Parcel
+import android.provider.MediaStore
 import android.text.InputType
 import android.text.TextUtils
 import android.util.Xml
@@ -49,6 +51,7 @@ import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
@@ -68,9 +71,11 @@ import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity() {
 
@@ -82,6 +87,7 @@ class MainActivity : Activity() {
         var lastHistoryUrl = ""
         var pendingUrl: String? = null
         var savedState: Bundle? = null
+        val blocked = AtomicInteger(0)
     }
 
     private val BG = Color.parseColor("#3A0A14")
@@ -109,8 +115,11 @@ class MainActivity : Activity() {
     private lateinit var navSpacer: View
     private lateinit var fullscreenHolder: FrameLayout
     private var lastPrivUi: Boolean? = null
+    @Volatile private var adBlockOn = true
+    @Volatile private var pausedHosts: Set<String> = emptySet()
     private var pendingMedia: PermissionRequest? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var cameraUri: Uri? = null
     private var customView: View? = null
     private var customCb: WebChromeClient.CustomViewCallback? = null
     private var newsHtml: String? = null
@@ -159,6 +168,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
+        loadAdBlockSettings()
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
         if (Build.VERSION.SDK_INT < 35) {
@@ -643,6 +653,12 @@ class MainActivity : Activity() {
             else -> "search"
         }
         lockIcon.setImageDrawable(IconDrawable(kind, color))
+        lockIcon.contentDescription = when (kind) {
+            "lock" -> "Secure connection"
+            "warning" -> "Connection not secure"
+            "shield" -> "Private tab"
+            else -> "Search"
+        }
     }
 
     private fun reloadOrStop() {
@@ -810,6 +826,7 @@ class MainActivity : Activity() {
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 tab.loading = true
+                tab.blocked.set(0)
                 if (tabs.getOrNull(cur) === tab) updateReloadButton()
                 val u = url ?: return
                 tab.url = displayUrl(u)
@@ -833,6 +850,21 @@ class MainActivity : Activity() {
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
+            }
+
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val req = request ?: return null
+                if (!adBlockOn || req.isForMainFrame) return null
+                val host = req.url.host?.lowercase() ?: return null
+                val pageHost = hostOf(tab.url)
+                if (pageHost != null) {
+                    if (pausedHosts.contains(pageHost)) return null
+                    // Never block the site you are on or its own subdomains.
+                    if (host == pageHost || host.endsWith("." + pageHost) || pageHost.endsWith("." + host)) return null
+                }
+                if (!AdBlock.isBlocked(host)) return null
+                tab.blocked.incrementAndGet()
+                return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
             }
 
             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
@@ -953,15 +985,8 @@ class MainActivity : Activity() {
                 val params = fileChooserParams ?: return false
                 fileCallback?.onReceiveValue(null)
                 fileCallback = filePathCallback
-                return try {
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(params.createIntent(), 200)
-                    true
-                } catch (e: Exception) {
-                    fileCallback = null
-                    toast("Can't open the file picker")
-                    false
-                }
+                chooseFiles(params)
+                return true
             }
 
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -1118,6 +1143,13 @@ class MainActivity : Activity() {
         if (requestCode == 100) {
             pendingMedia?.let { finishMedia(it) }
             pendingMedia = null
+        } else if (requestCode == 103) {
+            if (has(Manifest.permission.CAMERA)) {
+                launchCamera()
+            } else {
+                cancelFileChooser()
+                toast("Camera permission is needed to take a photo")
+            }
         } else if (requestCode == 101) {
             val cb = pendingGeoCb
             val o = pendingGeoOrigin
@@ -1234,9 +1266,120 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 200) {
-            fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+        if (requestCode == 200 || requestCode == 201) {
+            var results: Array<Uri>? = null
+            if (resultCode == RESULT_OK) {
+                if (requestCode == 201) {
+                    val photo = cameraUri
+                    if (photo != null) results = arrayOf(photo)
+                } else if (data != null) {
+                    val clip = data.clipData
+                    if (clip != null && clip.itemCount > 0) {
+                        results = Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
+                    } else {
+                        val one = data.data
+                        results = if (one != null) arrayOf(one) else WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+                    }
+                }
+            } else if (requestCode == 201) {
+                // Camera cancelled: remove the empty picture entry we created.
+                val photo = cameraUri
+                if (photo != null) {
+                    try {
+                        contentResolver.delete(photo, null, null)
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            cameraUri = null
+            fileCallback?.onReceiveValue(results)
             fileCallback = null
+        }
+    }
+
+    // ---- file, photo and camera pickers ----
+
+    private fun cancelFileChooser() {
+        fileCallback?.onReceiveValue(null)
+        fileCallback = null
+    }
+
+    private fun startPicker(intent: Intent, code: Int) {
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, code)
+        } catch (e: Exception) {
+            cancelFileChooser()
+            toast("Can't open the picker")
+        }
+    }
+
+    private fun chooseFiles(p: WebChromeClient.FileChooserParams) {
+        val types = p.acceptTypes.filter { it.isNotBlank() }
+        val hasImages = types.any { it.startsWith("image/") }
+        val imagesOnly = hasImages && types.all { it.startsWith("image/") }
+        val multiple = p.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
+        if (p.isCaptureEnabled && hasImages) {
+            launchCamera()
+        } else if (imagesOnly) {
+            launchPhotos(multiple)
+        } else if (hasImages) {
+            // The site accepts photos and other files, so let the person choose.
+            dlg()
+                .setTitle("Attach")
+                .setItems(arrayOf("Photos", "Camera", "Files")) { _, i ->
+                    when (i) {
+                        0 -> launchPhotos(multiple)
+                        1 -> launchCamera()
+                        else -> startPicker(p.createIntent(), 200)
+                    }
+                }
+                .setOnCancelListener { cancelFileChooser() }
+                .show()
+        } else {
+            startPicker(p.createIntent(), 200)
+        }
+    }
+
+    private fun launchPhotos(multiple: Boolean) {
+        val intent = if (Build.VERSION.SDK_INT >= 33) {
+            val pick = Intent(MediaStore.ACTION_PICK_IMAGES)
+            if (multiple) pick.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 10)
+            pick
+        } else {
+            val get = Intent(Intent.ACTION_GET_CONTENT)
+            get.addCategory(Intent.CATEGORY_OPENABLE)
+            get.type = "image/*"
+            if (multiple) get.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            get
+        }
+        startPicker(intent, 200)
+    }
+
+    private fun launchCamera() {
+        // The system camera needs our CAMERA permission when the app declares it.
+        if (!has(Manifest.permission.CAMERA)) {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), 103)
+            return
+        }
+        try {
+            val values = ContentValues()
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, "rweb_" + System.currentTimeMillis() + ".jpg")
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            if (uri == null) {
+                cancelFileChooser()
+                toast("Can't start the camera")
+                return
+            }
+            cameraUri = uri
+            val shot = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            shot.putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            shot.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startPicker(shot, 201)
+        } catch (e: Exception) {
+            cancelFileChooser()
+            toast("Can't start the camera")
         }
     }
 
@@ -1568,6 +1711,179 @@ class MainActivity : Activity() {
             .show()
     }
 
+    // ---- downloads list ----
+
+    private fun privateIdSet(): Set<String> = prefs.getStringSet("priv_dl", emptySet()) ?: emptySet()
+
+    private fun showDownloads() {
+        val wantPrivate = currentOrNull()?.priv == true
+        val screenH = resources.displayMetrics.heightPixels
+        val (d, box) = newSheet((screenH * 0.7).toInt())
+        sheetHandle(box)
+        val title = TextView(this)
+        title.text = if (wantPrivate) "Private downloads" else "Downloads"
+        title.textSize = 16f
+        title.setTextColor(INK)
+        title.setTypeface(title.typeface, Typeface.BOLD)
+        title.setPadding(dp(4), dp(4), dp(4), dp(10))
+        box.addView(title)
+
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        scroll.addView(list)
+        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // Returns true while anything is still downloading, so the list keeps refreshing.
+        fun render(): Boolean {
+            val items = Downloads.query(this, privateIdSet(), wantPrivate)
+            list.removeAllViews()
+            if (items.isEmpty()) {
+                val empty = TextView(this)
+                empty.text = "No downloads yet"
+                empty.textSize = 14f
+                empty.setTextColor(MUTE)
+                empty.gravity = Gravity.CENTER
+                empty.setPadding(0, dp(40), 0, dp(40))
+                list.addView(empty)
+                return false
+            }
+            for (item in items) {
+                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                lp.bottomMargin = dp(8)
+                list.addView(downloadRow(item) { render() }, lp)
+            }
+            return items.any { it.running }
+        }
+
+        val tick = object : Runnable {
+            override fun run() {
+                if (render() && d.isShowing) handler.postDelayed(this, 1000)
+            }
+        }
+        d.setOnDismissListener { handler.removeCallbacks(tick) }
+        d.show()
+        handler.post(tick)
+    }
+
+    private fun downloadRow(item: DownloadItem, onChanged: () -> Unit): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        val bg = GradientDrawable()
+        bg.setColor(BAR)
+        bg.cornerRadius = dp(16).toFloat()
+        row.background = bg
+        row.setPadding(dp(12), dp(10), dp(4), dp(10))
+        row.setOnClickListener {
+            if (item.done) {
+                if (!Downloads.open(this, item.id)) toast("No app can open this file")
+            }
+        }
+
+        val badge = TextView(this)
+        badge.gravity = Gravity.CENTER
+        badge.textSize = 11f
+        badge.setTextColor(INK)
+        val circle = GradientDrawable()
+        circle.shape = GradientDrawable.OVAL
+        circle.setColor(BG)
+        badge.background = circle
+        val ext = item.title.substringAfterLast('.', "").take(4).uppercase()
+        badge.text = if (ext.isEmpty()) "FILE" else ext
+        row.addView(badge, LinearLayout.LayoutParams(dp(42), dp(42)))
+
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(12), 0, dp(8), 0)
+        val name = TextView(this)
+        name.text = item.title
+        name.textSize = 14f
+        name.setTextColor(INK)
+        name.maxLines = 1
+        name.ellipsize = TextUtils.TruncateAt.END
+        val sub = TextView(this)
+        sub.text = Downloads.describe(item)
+        sub.textSize = 12f
+        sub.setTextColor(if (item.status == DownloadManager.STATUS_FAILED) ROSE else MUTE)
+        col.addView(name)
+        col.addView(sub)
+        if (item.running && item.total > 0) {
+            val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
+            bar.max = 100
+            bar.progress = item.percent
+            bar.progressTintList = ColorStateList.valueOf(ROSE)
+            val barLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4))
+            barLp.topMargin = dp(6)
+            col.addView(bar, barLp)
+        }
+        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val x = icon("close", INK)
+        x.setPadding(dp(12), dp(12), dp(12), dp(12))
+        x.contentDescription = if (item.running) "Cancel download" else "Delete download"
+        x.background = ripple()
+        x.setOnClickListener {
+            if (item.running) {
+                Downloads.remove(this, item.id)
+                onChanged()
+            } else {
+                dlg()
+                    .setTitle("Delete this file?")
+                    .setMessage(item.title)
+                    .setPositiveButton("Delete") { _, _ ->
+                        Downloads.remove(this, item.id)
+                        onChanged()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        row.addView(x, LinearLayout.LayoutParams(dp(44), dp(44)))
+        return row
+    }
+
+    // ---- ad and tracker blocking ----
+
+    private fun loadAdBlockSettings() {
+        adBlockOn = prefs.getBoolean("adblock", true)
+        pausedHosts = prefs.getStringSet("adblock_paused", emptySet())?.toSet() ?: emptySet()
+    }
+
+    private fun hostOf(url: String): String? = if (isHttp(url)) Uri.parse(url).host?.lowercase() else null
+
+    private fun reloadCurrent() {
+        val t = currentOrNull() ?: return
+        if (t.url.isEmpty()) loadStart(t.web) else t.web.reload()
+    }
+
+    private fun toggleAdBlock() {
+        adBlockOn = !adBlockOn
+        prefs.edit().putBoolean("adblock", adBlockOn).apply()
+        reloadCurrent()
+        toast(if (adBlockOn) "Ad and tracker blocking on" else "Ad and tracker blocking off")
+    }
+
+    private fun togglePauseHere() {
+        val host = hostOf(current().url)
+        if (host == null) {
+            toast("Open a website first")
+            return
+        }
+        val set = pausedHosts.toMutableSet()
+        val paused = if (set.contains(host)) {
+            set.remove(host)
+            false
+        } else {
+            set.add(host)
+            true
+        }
+        prefs.edit().putStringSet("adblock_paused", set).apply()
+        pausedHosts = set
+        reloadCurrent()
+        toast(if (paused) "Blocking paused on " + host else "Blocking active on " + host)
+    }
+
     // ---- UI building blocks ----
 
     private val SHEET = Color.parseColor("#2A0710")
@@ -1892,11 +2208,11 @@ class MainActivity : Activity() {
     private class MenuRow(val label: String, val value: String?, val danger: Boolean, val action: () -> Unit)
 
     private fun showMenu() {
-        val t = current()
+        val t = currentOrNull() ?: return
         val rows = listOf(
             MenuRow("Bookmarks", null, false) { showList("Bookmarks", "bookmarks") },
             MenuRow("History", null, false) { showList("History", "history") },
-            MenuRow("Downloads", null, false) { openDownloads() },
+            MenuRow("Downloads", null, false) { showDownloads() },
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
             MenuRow("News source", feedName(), false) { chooseNews() },
@@ -1904,6 +2220,8 @@ class MainActivity : Activity() {
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
             MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false) { toggleIcons() },
             MenuRow("Third-party cookies", if (thirdPartyCookies()) "Allowed" else "Blocked", false) { toggleThirdPartyCookies() },
+            MenuRow("Ad & tracker blocking", if (adBlockOn) "On \u00B7 " + t.blocked.get() + " blocked" else "Off", false) { toggleAdBlock() },
+            MenuRow("Blocking on this site", if (hostOf(t.url)?.let { pausedHosts.contains(it) } == true) "Paused" else "Active", false) { togglePauseHere() },
             MenuRow("Desktop site", if (t.desktop) "On" else "Off", false) { toggleDesktop() },
             MenuRow("Copy link", null, false) { copyLink() },
             MenuRow("Clear browsing data", null, true) {
