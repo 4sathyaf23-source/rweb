@@ -843,7 +843,7 @@ class MainActivity : Activity() {
         s.useWideViewPort = true
         s.allowFileAccess = false
         s.allowContentAccess = false
-        s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         s.userAgentString = if (tab.desktop) desktopUa else mobileUa
