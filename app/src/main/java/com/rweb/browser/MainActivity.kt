@@ -12,14 +12,19 @@ import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.Icon
 import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Build
@@ -105,6 +110,9 @@ class MainActivity : Activity() {
     private lateinit var tabBtn: TextView
     private lateinit var reloadBtn: ImageView
     private lateinit var lockIcon: ImageView
+    private lateinit var islandWrap: FrameLayout
+    private lateinit var floatMenu: ImageView
+    private var barsHidden = false
     private lateinit var bottomBg: GradientDrawable
     private lateinit var prefs: SharedPreferences
     private lateinit var mobileUa: String
@@ -183,6 +191,7 @@ class MainActivity : Activity() {
         restoreSavedTabs()
         val link = intent?.data?.toString()
         if (link != null) newTab(link) else if (tabs.isEmpty()) newTab(null)
+        if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
     }
 
     private fun buildDesktopUa(): String {
@@ -289,6 +298,7 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent?.data?.let { newTab(it.toString()) }
+        if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
     }
 
     // ---- background audio ----
@@ -575,7 +585,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, dp(48), 1f)
         )
 
-        val islandWrap = FrameLayout(this)
+        islandWrap = FrameLayout(this)
         islandWrap.clipChildren = false
         islandWrap.clipToPadding = false
         islandWrap.setPadding(dp(14), dp(6), dp(14), dp(8))
@@ -590,6 +600,20 @@ class MainActivity : Activity() {
 
         val frame = FrameLayout(this)
         frame.addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        floatMenu = icon("menu", INK)
+        floatMenu.setPadding(dp(10), dp(10), dp(10), dp(10))
+        floatMenu.contentDescription = "Menu"
+        val fb = GradientDrawable()
+        fb.shape = GradientDrawable.OVAL
+        fb.setColor(0xCC7A1022.toInt())
+        floatMenu.background = fb
+        floatMenu.elevation = dp(6).toFloat()
+        floatMenu.visibility = View.GONE
+        floatMenu.setOnClickListener { showMenu() }
+        val fLp = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.BOTTOM or Gravity.END)
+        fLp.rightMargin = dp(16)
+        fLp.bottomMargin = dp(28)
+        frame.addView(floatMenu, fLp)
         fullscreenHolder = FrameLayout(this)
         fullscreenHolder.setBackgroundColor(Color.BLACK)
         fullscreenHolder.visibility = View.GONE
@@ -1857,6 +1881,56 @@ class MainActivity : Activity() {
         return row
     }
 
+    // ---- app view (hide toolbars) and home screen shortcuts ----
+
+    private fun setBarsHidden(hidden: Boolean) {
+        barsHidden = hidden
+        topBar.visibility = if (hidden) View.GONE else View.VISIBLE
+        islandWrap.visibility = if (hidden) View.GONE else View.VISIBLE
+        floatMenu.visibility = if (hidden) View.VISIBLE else View.GONE
+    }
+
+    private fun letterIcon(letter: String): Icon {
+        val size = 192
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.color = BAR
+        c.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+        paint.color = INK
+        paint.textSize = 100f
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = Typeface.DEFAULT_BOLD
+        c.drawText(letter, size / 2f, size / 2f + 35f, paint)
+        return Icon.createWithBitmap(bmp)
+    }
+
+    // Puts the current site on the home screen. It opens in rweb with the toolbars hidden, like an app.
+    private fun addToHomeScreen() {
+        val t = current()
+        val host = hostOf(t.url)
+        if (t.priv || host == null) {
+            toast("Open a website in a normal tab first")
+            return
+        }
+        val sm = getSystemService(ShortcutManager::class.java)
+        if (sm == null || !sm.isRequestPinShortcutSupported) {
+            toast("Your launcher doesn't support home screen shortcuts")
+            return
+        }
+        val label = (if (t.title.isBlank()) host else t.title).take(24)
+        val launch = Intent(this, MainActivity::class.java)
+        launch.action = Intent.ACTION_VIEW
+        launch.data = Uri.parse(t.url)
+        launch.putExtra("app_mode", true)
+        val info = ShortcutInfo.Builder(this, "site-" + host)
+            .setShortLabel(label)
+            .setIcon(letterIcon(host.removePrefix("www.").take(1).uppercase()))
+            .setIntent(launch)
+            .build()
+        sm.requestPinShortcut(info, null)
+    }
+
     // ---- ad and tracker blocking ----
 
     private fun loadAdBlockSettings() {
@@ -2237,6 +2311,8 @@ class MainActivity : Activity() {
             MenuRow("Ad & tracker blocking", if (adBlockOn) "On \u00B7 " + t.blocked.get() + " blocked" else "Off", false) { toggleAdBlock() },
             MenuRow("Blocking on this site", if (hostOf(t.url)?.let { pausedHosts.contains(it) } == true) "Paused" else "Active", false) { togglePauseHere() },
             MenuRow("Desktop site", if (t.desktop) "On" else "Off", false) { toggleDesktop() },
+            MenuRow("Toolbars", if (barsHidden) "Hidden" else "Visible", false) { setBarsHidden(!barsHidden) },
+            MenuRow("Add to home screen", null, false) { addToHomeScreen() },
             MenuRow("Copy link", null, false) { copyLink() },
             MenuRow("Clear browsing data", null, true) {
                 confirm(
