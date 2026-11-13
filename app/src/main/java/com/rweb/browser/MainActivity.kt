@@ -843,7 +843,7 @@ class MainActivity : Activity() {
         s.useWideViewPort = true
         s.allowFileAccess = false
         s.allowContentAccess = false
-        s.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         s.userAgentString = if (tab.desktop) desktopUa else mobileUa
@@ -883,7 +883,10 @@ class MainActivity : Activity() {
                 val host = req.url.host?.lowercase() ?: return null
                 val pageHost = hostOf(tab.url)
                 if (pageHost != null) {
-                    if (pausedHosts.contains(pageHost)) return null
+                    val isPaused = pausedHosts.any { paused ->
+    pageHost == paused || pageHost.endsWith(".$paused")
+}
+if (isPaused) return null
                     // Never block the site you are on or its own subdomains.
                     if (host == pageHost || host.endsWith("." + pageHost) || pageHost.endsWith("." + host)) return null
                 }
