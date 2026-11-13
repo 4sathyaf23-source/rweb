@@ -1,35 +1,56 @@
-package com.rweb.browser
+private var isReaderModeActive = false
 
-// A small built-in list of well-known third-party ad and tracking domains.
-// A request is blocked when its host, or any parent domain of it, is on the list.
-object AdBlock {
-    private val domains = hashSetOf(
-        // Google advertising and analytics
-        "doubleclick.net", "googlesyndication.com", "googleadservices.com", "googletagservices.com",
-        "adservice.google.com", "google-analytics.com", "2mdn.net",
-        // Ad exchanges and networks
-        "adnxs.com", "adsrvr.org", "rubiconproject.com", "pubmatic.com", "openx.net", "criteo.com",
-        "criteo.net", "taboola.com", "outbrain.com", "amazon-adsystem.com", "advertising.com",
-        "casalemedia.com", "smartadserver.com", "serving-sys.com", "teads.tv", "mgid.com",
-        "revcontent.com", "yieldmo.com", "sharethrough.com", "indexww.com", "lijit.com",
-        "bidswitch.net", "contextweb.com", "adform.net", "media.net", "adroll.com", "3lift.com",
-        "triplelift.com", "gumgum.com", "tapad.com", "turn.com", "mookie1.com", "zedo.com",
-        // Pop-up and aggressive ad networks
-        "popads.net", "propellerads.com", "popcash.net", "exoclick.com", "trafficjunky.net",
-        // Measurement, audience and tracking
-        "scorecardresearch.com", "quantserve.com", "quantcount.com", "moatads.com",
-        "adsafeprotected.com", "bluekai.com", "krxd.net", "demdex.net", "everesttech.net",
-        "omtrdc.net", "rlcdn.com", "chartbeat.com", "bat.bing.com",
-        // Session recording and heatmaps
-        "hotjar.com", "mouseflow.com", "crazyegg.com"
-    )
+    private fun toggleReaderMode() {
+        val web = currentOrNull()?.web ?: return
+        if (isReaderModeActive) {
+            // Reload page to exit reader mode
+            isReaderModeActive = false
+            web.reload()
+            toast("Exited Reader Mode")
+        } else {
+            isReaderModeActive = true
+            val readerJs = """
+                (function() {
+                    // Simple text & heading extraction for reader view
+                    var title = document.title || '';
+                    var paragraphs = document.querySelectorAll('p, h1, h2, h3, h4, img');
+                    var content = '';
+                    paragraphs.forEach(function(el) {
+                        if (el.tagName === 'IMG') {
+                            if (el.src && el.width > 300 && el.height > 200) {
+                                content += '<img src="' + el.src + '" style="max-width:100%;border-radius:12px;margin:16px 0;">';
+                            }
+                        } else {
+                            var text = el.innerText.trim();
+                            if (text.length > 20 || el.tagName.startsWith('H')) {
+                                content += '<' + el.tagName.toLowerCase() + '>' + text + '</' + el.tagName.toLowerCase() + '>';
+                            }
+                        }
+                    });
+                    
+                    if (!content) {
+                        content = '<p>Could not extract article content.</p>';
+                    }
 
-    fun isBlocked(host: String): Boolean {
-        var h = host.lowercase()
-        while (h.contains('.')) {
-            if (domains.contains(h)) return true
-            h = h.substring(h.indexOf('.') + 1)
+                    var readerHtml = '<html><head><meta name="viewport" content="width=device-width,initial-scale=1">' +
+                        '<style>' +
+                        'body { background: #3A0A14; color: #FFF1F3; font-family: sans-serif; padding: 24px 20px; max-width: 680px; margin: 0 auto; line-height: 1.6; }' +
+                        'h1, h2, h3 { color: #FF6B7D; }' +
+                        'h1 { font-size: 28px; margin-bottom: 8px; }' +
+                        'p { font-size: 16px; margin-bottom: 16px; color: #FFF1F3; }' +
+                        'img { display: block; margin: 20px auto; }' +
+                        '</style></head><body>' +
+                        '<h1>' + title + '</h1>' +
+                        '<hr style="border:0;border-top:1px solid #7A1022;margin:16px 0 24px;">' +
+                        content +
+                        '</body></html>';
+                    
+                    document.open();
+                    document.write(readerHtml);
+                    document.close();
+                })();
+            """.trimIndent()
+            web.evaluateJavascript(readerJs, null)
+            toast("Reader Mode active")
         }
-        return false
     }
-}
