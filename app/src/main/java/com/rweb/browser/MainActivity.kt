@@ -80,6 +80,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity() {
@@ -135,6 +136,9 @@ class MainActivity : Activity() {
     private var newsLoading = false
     private var newsItems: List<Triple<String, String, String>>? = null
     private var newsName = ""
+    private var vidHtml: String? = null
+    private var vidTime = 0L
+    private var vidLoading = false
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
@@ -152,7 +156,8 @@ class MainActivity : Activity() {
 
     private val feeds = listOf(
         Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
-        Pair("Google News", "https://news.google.com/rss"),
+        Pair("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml"),
+        Pair("Google News (local)", "gnews:local"),
         Pair("NPR", "https://feeds.npr.org/1001/rss.xml"),
         Pair("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml")
     )
@@ -167,7 +172,7 @@ class MainActivity : Activity() {
         const val DESKTOP_UA_FALLBACK = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}</style></head><body><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:24px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}</style></head><body><h1>rweb</h1><form action=""""
         const val HEAD_B = """" method="get"><input name="q" placeholder="Search the web" autocomplete="off"></form><div class="grid">"""
     }
 
@@ -705,6 +710,7 @@ class MainActivity : Activity() {
         }
         web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
         refreshNews()
+        refreshVideos()
     }
 
     private fun thirdPartyCookies(): Boolean = prefs.getBoolean("tpc", true)
@@ -843,7 +849,7 @@ class MainActivity : Activity() {
         s.useWideViewPort = true
         s.allowFileAccess = false
         s.allowContentAccess = false
-        s.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         s.userAgentString = if (tab.desktop) desktopUa else mobileUa
@@ -873,6 +879,7 @@ class MainActivity : Activity() {
                 } else {
                     tab.title = "New tab"
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
+                    if (!tab.priv && videosOn()) vidHtml?.let { injectVideos(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
             }
@@ -883,10 +890,7 @@ class MainActivity : Activity() {
                 val host = req.url.host?.lowercase() ?: return null
                 val pageHost = hostOf(tab.url)
                 if (pageHost != null) {
-                    val isPaused = pausedHosts.any { paused ->
-    pageHost == paused || pageHost.endsWith(".$paused")
-}
-if (isPaused) return null
+                    if (pausedHosts.contains(pageHost)) return null
                     // Never block the site you are on or its own subdomains.
                     if (host == pageHost || host.endsWith("." + pageHost) || pageHost.endsWith("." + host)) return null
                 }
@@ -1257,6 +1261,8 @@ if (isPaused) return null
         }
         sb.append("</div><div id=\"news\">")
         sb.append(newsHtml ?: "<div class=\"nh\">Loading news...</div>")
+        sb.append("</div><div id=\"vids\">")
+        if (videosOn()) sb.append(vidHtml ?: "")
         sb.append("</div></body></html>")
         return sb.toString()
     }
@@ -1487,7 +1493,8 @@ if (isPaused) return null
 
     private fun feedUrl(): String {
         val saved = prefs.getString("news", null)
-        return if (saved != null && feeds.any { it.second == saved }) saved else feeds[0].second
+        if (saved == "https://news.google.com/rss") return "gnews:local"
+        return if (saved != null && feeds.any { it.second == saved }) saved else "gnews:local"
     }
 
     private fun feedName(): String = feeds.first { it.second == feedUrl() }.first
@@ -1524,7 +1531,7 @@ if (isPaused) return null
                         val type = parser.getAttributeValue(null, "type") ?: ""
                         val medium = parser.getAttributeValue(null, "medium") ?: ""
                         if (u != null && image.isEmpty() && (tag == "media:thumbnail" || type.startsWith("image") || medium == "image")) {
-                            image = u
+                            image = u.replace("/ace/standard/240/", "/ace/standard/480/").replace("/ace/ws/240/", "/ace/ws/480/")
                         }
                     }
                 } else if (ev == XmlPullParser.TEXT) {
@@ -1555,12 +1562,20 @@ if (isPaused) return null
         val sb = StringBuilder()
         sb.append("<details class=\"nd\"").append(if (open) " open" else "").append(">")
         sb.append("<summary class=\"nh\"><span>Top news \u00B7 ").append(esc(name)).append("</span></summary>")
-        for (n in items) {
-            sb.append("<a class=\"nw\" href=\"").append(esc(n.second)).append("\">")
-            sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
-            if (n.third.startsWith("http")) {
-                sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(n.third))
+        for ((idx, n) in items.withIndex()) {
+            val hasImage = n.third.startsWith("http")
+            val hero = idx == 0 && hasImage
+            sb.append("<a class=\"nw").append(if (hero) " hero" else "").append("\" href=\"").append(esc(n.second)).append("\">")
+            if (hero) {
+                sb.append("<img class=\"hi\" referrerpolicy=\"no-referrer\" src=\"").append(esc(n.third))
                 sb.append("\" onerror=\"this.style.display='none'\">")
+                sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
+            } else {
+                sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
+                if (hasImage) {
+                    sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(n.third))
+                    sb.append("\" onerror=\"this.style.display='none'\">")
+                }
             }
             sb.append("</a>")
         }
@@ -1579,11 +1594,17 @@ if (isPaused) return null
         if (newsLoading) return
         if (newsHtml != null && System.currentTimeMillis() - newsTime < 10 * 60 * 1000) return
         newsLoading = true
-        val feed = feedUrl()
-        val name = feedName()
+        val feed = resolveFeed(feedUrl())
+        val name = feedLabel()
         Thread {
             val items: List<Triple<String, String, String>>? = try {
-                val l = fetchNews(feed)
+                var l = try {
+                    fetchNews(feed)
+                } catch (e: Exception) {
+                    emptyList<Triple<String, String, String>>()
+                }
+                // If Google doesn't know the place as a location, search for it by name instead.
+                if (l.isEmpty() && feed.contains("/headlines/section/geo/")) l = fetchNews(googleNewsSearchUrl())
                 if (l.isEmpty()) null else l
             } catch (e: Exception) {
                 null
@@ -1591,7 +1612,7 @@ if (isPaused) return null
             runOnUiThread {
                 newsLoading = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (feed != feedUrl()) {
+                if (feed != resolveFeed(feedUrl())) {
                     refreshNews()
                 } else {
                     val show: String
@@ -1882,6 +1903,176 @@ if (isPaused) return null
         }
         row.addView(x, LinearLayout.LayoutParams(dp(44), dp(44)))
         return row
+    }
+
+    // ---- homepage videos (latest uploads from a news channel's YouTube feed) ----
+
+    private val videoFeeds = listOf(
+        Pair("BBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"),
+        Pair("Al Jazeera English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg")
+    )
+
+    private fun videosOn(): Boolean = prefs.getString("videos_src", videoFeeds[0].first) != "off"
+
+    private fun videoSource(): Pair<String, String> {
+        val saved = prefs.getString("videos_src", videoFeeds[0].first)
+        return videoFeeds.firstOrNull { it.first == saved } ?: videoFeeds[0]
+    }
+
+    private fun buildVideos(name: String, items: List<Triple<String, String, String>>): String {
+        val sb = StringBuilder()
+        sb.append("<div class=\"nh\">Top videos \u00B7 ").append(esc(name)).append("</div><div class=\"vrow\">")
+        for (v in items.take(6)) {
+            sb.append("<a class=\"vc\" href=\"").append(esc(v.second)).append("\"><div class=\"vt\">")
+            if (v.third.startsWith("http")) {
+                sb.append("<img referrerpolicy=\"no-referrer\" src=\"").append(esc(v.third))
+                sb.append("\" onerror=\"this.style.display='none'\">")
+            }
+            sb.append("<span class=\"vp\">\u25B6</span></div><div class=\"vn\">").append(esc(v.first)).append("</div></a>")
+        }
+        sb.append("</div>")
+        return sb.toString()
+    }
+
+    private fun injectVideos(web: WebView, html: String) {
+        web.evaluateJavascript(
+            "(function(){var e=document.getElementById('vids');if(e){e.innerHTML=" + JSONObject.quote(html) + ";}})()",
+            null
+        )
+    }
+
+    private fun refreshVideos() {
+        if (!videosOn() || vidLoading) return
+        if (vidHtml != null && System.currentTimeMillis() - vidTime < 15 * 60 * 1000) return
+        vidLoading = true
+        val src = videoSource()
+        Thread {
+            val items: List<Triple<String, String, String>>? = try {
+                val l = fetchNews(src.second)
+                if (l.isEmpty()) null else l
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                vidLoading = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (items != null && videosOn()) {
+                    val html = buildVideos(src.first, items)
+                    vidHtml = html
+                    vidTime = System.currentTimeMillis()
+                    for (t in tabs) {
+                        if (!t.priv && t.url.isEmpty()) injectVideos(t.web, html)
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun chooseVideos() {
+        val names = arrayOf("Off") + videoFeeds.map { it.first }
+        val idx = if (!videosOn()) 0 else videoFeeds.indexOfFirst { it.first == videoSource().first } + 1
+        dlg()
+            .setTitle("Homepage videos")
+            .setSingleChoiceItems(names, idx.coerceAtLeast(0)) { d, i ->
+                prefs.edit().putString("videos_src", if (i == 0) "off" else videoFeeds[i - 1].first).apply()
+                vidHtml = null
+                vidTime = 0L
+                d.dismiss()
+                reloadStartIfShown()
+            }
+            .show()
+    }
+
+    // ---- news location (country from phone settings, optional state or city) ----
+
+    private val newsCountries = listOf(
+        Pair("India", "IN"), Pair("United States", "US"), Pair("United Kingdom", "GB"),
+        Pair("Australia", "AU"), Pair("Canada", "CA"), Pair("Ireland", "IE"),
+        Pair("New Zealand", "NZ"), Pair("Singapore", "SG"), Pair("South Africa", "ZA"),
+        Pair("Pakistan", "PK"), Pair("Philippines", "PH"), Pair("Nigeria", "NG"),
+        Pair("Kenya", "KE"), Pair("Malaysia", "MY")
+    )
+
+    private fun newsCountryCode(): String {
+        val saved = prefs.getString("news_country", "auto") ?: "auto"
+        if (saved != "auto" && newsCountries.any { it.second == saved }) return saved
+        val device = Locale.getDefault().country
+        return if (newsCountries.any { it.second == device }) device else "US"
+    }
+
+    private fun newsCountryName(): String = newsCountries.first { it.second == newsCountryCode() }.first
+
+    private fun newsArea(): String = (prefs.getString("news_area", "") ?: "").trim()
+
+    private fun newsEdition(): String {
+        val cc = newsCountryCode()
+        return "hl=en-" + cc + "&gl=" + cc + "&ceid=" + cc + ":en"
+    }
+
+    private fun googleNewsUrl(): String {
+        val area = newsArea()
+        return if (area.isEmpty()) {
+            "https://news.google.com/rss?" + newsEdition()
+        } else {
+            "https://news.google.com/rss/headlines/section/geo/" + Uri.encode(area) + "?" + newsEdition()
+        }
+    }
+
+    private fun googleNewsSearchUrl(): String =
+        "https://news.google.com/rss/search?q=" + Uri.encode(newsArea()) + "&" + newsEdition()
+
+    private fun resolveFeed(url: String): String = if (url == "gnews:local") googleNewsUrl() else url
+
+    private fun feedLabel(): String =
+        if (feedUrl() == "gnews:local") {
+            "Google News \u00B7 " + (if (newsArea().isEmpty()) newsCountryName() else newsArea())
+        } else {
+            feedName()
+        }
+
+    private fun chooseNewsLocation() {
+        val names = arrayOf("Automatic (from phone settings)") + newsCountries.map { it.first }
+        val saved = prefs.getString("news_country", "auto") ?: "auto"
+        val idx = if (saved == "auto") 0 else newsCountries.indexOfFirst { it.second == saved } + 1
+        dlg()
+            .setTitle("News country")
+            .setSingleChoiceItems(names, idx.coerceAtLeast(0)) { d, i ->
+                prefs.edit().putString("news_country", if (i == 0) "auto" else newsCountries[i - 1].second).apply()
+                d.dismiss()
+                askNewsArea()
+            }
+            .show()
+    }
+
+    private fun askNewsArea() {
+        val input = EditText(this)
+        input.setSingleLine()
+        input.hint = "State or city (optional)"
+        input.setText(newsArea())
+        dlg()
+            .setTitle("Local area")
+            .setMessage("Add a state or city to see local stories, or leave it empty for the whole country.")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                prefs.edit().putString("news_area", input.text.toString().trim()).apply()
+                newsLocationChanged()
+            }
+            .setNeutralButton("Clear") { _, _ ->
+                prefs.edit().putString("news_area", "").apply()
+                newsLocationChanged()
+            }
+            .setNegativeButton("Cancel") { _, _ -> newsLocationChanged() }
+            .show()
+    }
+
+    private fun newsLocationChanged() {
+        // Local news comes from the Google News source, so switch to it.
+        prefs.edit().putString("news", "gnews:local").apply()
+        newsHtml = null
+        newsItems = null
+        newsTime = 0L
+        reloadStartIfShown()
+        toast("News: " + newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()))
     }
 
     // ---- app view (hide toolbars) and home screen shortcuts ----
@@ -2307,6 +2498,8 @@ if (isPaused) return null
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
             MenuRow("News source", feedName(), false) { chooseNews() },
+            MenuRow("Homepage videos", if (videosOn()) "On \u00B7 " + videoSource().first else "Off", false) { chooseVideos() },
+            MenuRow("News location", newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()), false) { chooseNewsLocation() },
             MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
             MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false) { toggleIcons() },
