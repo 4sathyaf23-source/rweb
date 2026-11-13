@@ -1,4 +1,4 @@
-package com.example.yourapp // TODO: change to your project's package name
+package com.rweb.browser
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
