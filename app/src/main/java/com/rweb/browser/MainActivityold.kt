@@ -328,6 +328,7 @@ class MainActivity : Activity() {
                     stopPlaybackService()
                     try {
                         web.onPause()
+                        web.pauseTimers()
                     } catch (e: Exception) {
                     }
                     handler.removeCallbacks(mediaPoll)
@@ -378,13 +379,19 @@ class MainActivity : Activity() {
                 handler.postDelayed(mediaPoll, 3000)
             } else {
                 try {
-                    currentOrNull()?.web?.onPause()
+                    currentOrNull()?.web?.let {
+                        it.onPause()
+                        it.pauseTimers()
+                    }
                 } catch (e: Exception) {
                 }
             }
         } else {
             try {
-                currentOrNull()?.web?.onPause()
+                currentOrNull()?.web?.let {
+                        it.onPause()
+                        it.pauseTimers()
+                    }
             } catch (e: Exception) {
             }
         }
@@ -398,7 +405,10 @@ class MainActivity : Activity() {
         inBackground = false
         stopPlaybackService()
         try {
-            currentOrNull()?.web?.onResume()
+            currentOrNull()?.web?.let {
+                it.onResume()
+                it.resumeTimers()
+            }
         } catch (e: Exception) {
         }
         handler.removeCallbacks(mediaPoll)
@@ -2364,387 +2374,4 @@ class MainActivity : Activity() {
         return Pair(d, box)
     }
 
-    private fun sheetHandle(box: LinearLayout) {
-        val h = View(this)
-        val bg = GradientDrawable()
-        bg.setColor(0x4DFFFFFF)
-        bg.cornerRadius = dp(2).toFloat()
-        h.background = bg
-        val lp = LinearLayout.LayoutParams(dp(40), dp(4))
-        lp.gravity = Gravity.CENTER_HORIZONTAL
-        lp.bottomMargin = dp(14)
-        box.addView(h, lp)
-    }
-
-    private fun quickAction(kind: String, label: String, onClick: () -> Unit): View {
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.gravity = Gravity.CENTER_HORIZONTAL
-        col.setOnClickListener { onClick() }
-        val circle = FrameLayout(this)
-        val bg = GradientDrawable()
-        bg.shape = GradientDrawable.OVAL
-        bg.setColor(BAR)
-        circle.background = bg
-        circle.addView(icon(kind, INK), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
-        col.addView(circle, LinearLayout.LayoutParams(dp(54), dp(54)))
-        val tv = TextView(this)
-        tv.text = label
-        tv.textSize = 12f
-        tv.setTextColor(MUTE)
-        tv.gravity = Gravity.CENTER
-        tv.setPadding(0, dp(6), 0, 0)
-        col.addView(tv)
-        return col
-    }
-
-    private fun sheetRow(label: String, value: String?, danger: Boolean, onClick: () -> Unit): View {
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        row.minimumHeight = dp(48)
-        row.setPadding(dp(4), 0, dp(4), 0)
-        row.background = ripple()
-        row.setOnClickListener { onClick() }
-        val l = TextView(this)
-        l.text = label
-        l.textSize = 15f
-        l.setTextColor(if (danger) ROSE else INK)
-        row.addView(l, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (value != null) {
-            val v = TextView(this)
-            v.text = value
-            v.textSize = 13f
-            v.setTextColor(MUTE)
-            row.addView(v)
-        }
-        return row
-    }
-
-    private fun pillButton(label: String, primary: Boolean, onClick: () -> Unit): TextView {
-        val b = TextView(this)
-        b.text = label
-        b.textSize = 14f
-        b.setTypeface(b.typeface, Typeface.BOLD)
-        b.gravity = Gravity.CENTER
-        b.setTextColor(if (primary) BG else INK)
-        val bg = GradientDrawable()
-        bg.setColor(if (primary) ROSE else BAR)
-        bg.cornerRadius = dp(23).toFloat()
-        b.background = bg
-        b.setOnClickListener { onClick() }
-        return b
-    }
-
-    private fun tabRow(t: Tab, isCur: Boolean, onSelect: () -> Unit, onClose: () -> Unit): View {
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(if (t.priv) PRIV else BAR)
-        bg.cornerRadius = dp(16).toFloat()
-        if (isCur) bg.setStroke(dp(2), ROSE)
-        row.background = bg
-        row.setPadding(dp(12), dp(10), dp(4), dp(10))
-        row.setOnClickListener { onSelect() }
-
-        val badge = TextView(this)
-        badge.gravity = Gravity.CENTER
-        badge.textSize = 15f
-        badge.setTextColor(INK)
-        val circle = GradientDrawable()
-        circle.shape = GradientDrawable.OVAL
-        circle.setColor(BG)
-        badge.background = circle
-        badge.text = if (t.priv) "P" else t.title.trim().take(1).uppercase().ifEmpty { "N" }
-        row.addView(badge, LinearLayout.LayoutParams(dp(36), dp(36)))
-
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(12), 0, dp(8), 0)
-        val name = TextView(this)
-        name.text = if (t.title.isBlank()) "New tab" else t.title
-        name.textSize = 14f
-        name.setTextColor(INK)
-        name.maxLines = 1
-        name.ellipsize = TextUtils.TruncateAt.END
-        val sub = TextView(this)
-        sub.text = (if (t.priv) "Private \u00B7 " else "") + (Uri.parse(t.url).host ?: "Start page")
-        sub.textSize = 12f
-        sub.setTextColor(MUTE)
-        sub.maxLines = 1
-        sub.ellipsize = TextUtils.TruncateAt.END
-        col.addView(name)
-        col.addView(sub)
-        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-
-        val x = icon("close", INK)
-        x.setPadding(dp(12), dp(12), dp(12), dp(12))
-        x.contentDescription = "Close tab"
-        x.background = ripple()
-        x.setOnClickListener { onClose() }
-        row.addView(x, LinearLayout.LayoutParams(dp(44), dp(44)))
-        return row
-    }
-
-    // ---- storage (history and bookmarks) ----
-
-    private fun loadList(key: String): MutableList<Pair<String, String>> {
-        val out = mutableListOf<Pair<String, String>>()
-        try {
-            val arr = JSONArray(prefs.getString(key, "[]"))
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                out.add(Pair(o.getString("t"), o.getString("u")))
-            }
-        } catch (e: Exception) {
-        }
-        return out
-    }
-
-    private fun saveList(key: String, list: List<Pair<String, String>>) {
-        val arr = JSONArray()
-        for (p in list) arr.put(JSONObject().put("t", p.first).put("u", p.second))
-        prefs.edit().putString(key, arr.toString()).apply()
-    }
-
-    private fun addHistory(title: String, url: String) {
-        val l = loadList("history")
-        l.removeAll { it.second == url }
-        l.add(0, Pair(title, url))
-        saveList("history", l.take(200))
-    }
-
-    private fun updateHistoryTitle(url: String, title: String) {
-        val l = loadList("history")
-        val idx = l.indexOfFirst { it.second == url }
-        if (idx >= 0 && l[idx].first != title) {
-            l[idx] = Pair(title, url)
-            saveList("history", l)
-        }
-    }
-
-    private fun addBookmark() {
-        val t = current()
-        if (t.priv) {
-            toast("Can't bookmark in a private tab")
-            return
-        }
-        if (t.url.isEmpty()) {
-            toast("Open a page first")
-            return
-        }
-        val l = loadList("bookmarks")
-        if (l.any { it.second == t.url }) {
-            toast("Already bookmarked")
-            return
-        }
-        l.add(0, Pair(t.title, t.url))
-        saveList("bookmarks", l)
-        toast("Bookmarked")
-    }
-
-    // ---- dialogs ----
-
-    private fun showList(title: String, key: String) {
-        val l = loadList(key)
-        if (l.isEmpty()) {
-            toast("Nothing here yet")
-            return
-        }
-        val labels = l.map { (if (it.first.isBlank()) it.second else it.first) + "\n" + it.second }.toTypedArray()
-        val b = dlg().setTitle(title)
-            .setItems(labels) { _, i -> pickItem(key, l[i]) }
-        if (key == "history") {
-            b.setNeutralButton("Clear all") { _, _ ->
-                confirm("Clear all history?", "This can't be undone.") {
-                    saveList(key, emptyList())
-                    toast("History cleared")
-                }
-            }
-        }
-        b.setNegativeButton("Close", null).show()
-    }
-
-    private fun pickItem(key: String, item: Pair<String, String>) {
-        dlg()
-            .setTitle(item.first.take(40))
-            .setItems(arrayOf("Open", "Open in new tab", "Delete")) { _, which ->
-                when (which) {
-                    0 -> current().web.loadUrl(item.second)
-                    1 -> newTab(item.second)
-                    2 -> {
-                        val l = loadList(key)
-                        l.removeAll { it.second == item.second }
-                        saveList(key, l)
-                        toast("Deleted")
-                    }
-                }
-            }.show()
-    }
-
-    private fun showTabs() {
-        val screenH = resources.displayMetrics.heightPixels
-        val (d, box) = newSheet((screenH * 0.7).toInt())
-        sheetHandle(box)
-        val title = TextView(this)
-        title.textSize = 16f
-        title.setTextColor(INK)
-        title.setTypeface(title.typeface, Typeface.BOLD)
-        title.setPadding(dp(4), dp(4), dp(4), dp(10))
-        box.addView(title)
-
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this)
-        list.orientation = LinearLayout.VERTICAL
-        scroll.addView(list)
-        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-
-        fun render() {
-            list.removeAllViews()
-            title.text = "Tabs (" + tabs.size + ")"
-            for (i in tabs.indices) {
-                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                lp.bottomMargin = dp(8)
-                list.addView(
-                    tabRow(tabs[i], i == cur, {
-                        d.dismiss()
-                        switchTo(i)
-                    }, {
-                        closeTab(i)
-                        render()
-                    }),
-                    lp
-                )
-            }
-        }
-        render()
-
-        val actions = LinearLayout(this)
-        actions.orientation = LinearLayout.HORIZONTAL
-        val leftLp = LinearLayout.LayoutParams(0, dp(46), 1f)
-        leftLp.rightMargin = dp(8)
-        actions.addView(pillButton("New tab", true) {
-            d.dismiss()
-            newTab(null)
-        }, leftLp)
-        actions.addView(pillButton("New private tab", false) {
-            d.dismiss()
-            newTab(null, true)
-        }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        val actionsLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        actionsLp.topMargin = dp(8)
-        box.addView(actions, actionsLp)
-        d.show()
-    }
-
-    private class MenuRow(val label: String, val value: String?, val danger: Boolean, val action: () -> Unit)
-
-    private fun showMenu() {
-        val t = currentOrNull() ?: return
-        val rows = listOf(
-            MenuRow("Bookmarks", null, false) { showList("Bookmarks", "bookmarks") },
-            MenuRow("History", null, false) { showList("History", "history") },
-            MenuRow("Downloads", null, false) { showDownloads() },
-            MenuRow("Find in page", null, false) { findInPage() },
-            MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
-            MenuRow("News source", feedName(), false) { chooseNews() },
-            MenuRow("Homepage videos", if (videosOn()) "On \u00B7 " + videoSource().first else "Off", false) { chooseVideos() },
-            MenuRow("News location", newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()), false) { chooseNewsLocation() },
-            MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
-            MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
-            MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false) { toggleIcons() },
-            MenuRow("Third-party cookies", if (thirdPartyCookies()) "Allowed" else "Blocked", false) { toggleThirdPartyCookies() },
-            MenuRow("Ad & tracker blocking", if (adBlockOn) "On \u00B7 " + t.blocked.get() + " blocked" else "Off", false) { toggleAdBlock() },
-            MenuRow("Blocking on this site", if (hostOf(t.url)?.let { pausedHosts.contains(it) } == true) "Paused" else "Active", false) { togglePauseHere() },
-            MenuRow("Desktop site", if (t.desktop) "On" else "Off", false) { toggleDesktop() },
-            MenuRow("Toolbars", if (barsHidden) "Hidden" else "Visible", false) { setBarsHidden(!barsHidden) },
-            MenuRow("Add to home screen", null, false) { addToHomeScreen() },
-            MenuRow("Copy link", null, false) { copyLink() },
-            MenuRow("Clear browsing data", null, true) {
-                confirm(
-                    "Clear browsing data?",
-                    "This deletes history, cookies, cache and saved site data, and signs you out of websites."
-                ) { clearData() }
-            }
-        )
-        val screenH = resources.displayMetrics.heightPixels
-        val h = minOf(dp(170 + rows.size * 49), (screenH * 0.85).toInt())
-        val (d, box) = newSheet(h)
-        sheetHandle(box)
-
-        val quick = LinearLayout(this)
-        quick.orientation = LinearLayout.HORIZONTAL
-        quick.setPadding(0, dp(4), 0, dp(12))
-        val qLp = { LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f) }
-        quick.addView(quickAction("plus", "New tab") {
-            d.dismiss()
-            newTab(null)
-        }, qLp())
-        quick.addView(quickAction("shield", "Private") {
-            d.dismiss()
-            newTab(null, true)
-        }, qLp())
-        quick.addView(quickAction("star", "Bookmark") {
-            d.dismiss()
-            addBookmark()
-        }, qLp())
-        quick.addView(quickAction("share", "Share") {
-            d.dismiss()
-            sharePage()
-        }, qLp())
-        box.addView(quick)
-
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this)
-        list.orientation = LinearLayout.VERTICAL
-        for (r in rows) {
-            val divider = View(this)
-            divider.setBackgroundColor(0x1AFFFFFF)
-            list.addView(divider, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)))
-            list.addView(sheetRow(r.label, r.value, r.danger) {
-                d.dismiss()
-                r.action()
-            })
-        }
-        scroll.addView(list)
-        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        d.show()
-    }
-
-    private fun toggleDesktop() {
-        val t = current()
-        t.desktop = !t.desktop
-        applyClientIdentity(t.web.settings, t.desktop, true)
-        t.web.reload()
-        toast(if (t.desktop) "Desktop site on" else "Desktop site off")
-    }
-
-    private fun sharePage() {
-        val u = current().url
-        if (u.isEmpty()) {
-            toast("Open a page first")
-            return
-        }
-        val send = Intent(Intent.ACTION_SEND)
-        send.type = "text/plain"
-        send.putExtra(Intent.EXTRA_TEXT, u)
-        startActivity(Intent.createChooser(send, "Share page"))
-    }
-
-    private fun clearData() {
-        for (t in tabs) {
-            t.web.clearCache(true)
-            t.web.clearFormData()
-            t.web.clearSslPreferences()
-            if (!t.priv) t.web.clearHistory()
-        }
-        File(filesDir, "tabs.bin").delete()
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
-        WebStorage.getInstance().deleteAllData()
-        GeolocationPermissions.getInstance().clearAll()
-        saveList("history", emptyList())
-        toast("Browsing data cleared")
-    }
-}
+    private fun sheetHandle(box: Linear
