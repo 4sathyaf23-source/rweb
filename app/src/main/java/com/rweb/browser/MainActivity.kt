@@ -71,6 +71,8 @@ import android.widget.TextView
 import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import androidx.webkit.ProfileStore
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONArray
@@ -81,6 +83,9 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity() {
@@ -157,6 +162,8 @@ class MainActivity : Activity() {
     private val feeds = listOf(
         Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
         Pair("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml"),
+        Pair("Times of India", "https://timesofindia.indiatimes.com/rssfeedstopstories.cms"),
+        Pair("The Hindu", "https://www.thehindu.com/news/national/feeder/default.rss"),
         Pair("Google News (local)", "gnews:local"),
         Pair("NPR", "https://feeds.npr.org/1001/rss.xml"),
         Pair("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml")
@@ -852,7 +859,7 @@ class MainActivity : Activity() {
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
-        s.userAgentString = if (tab.desktop) desktopUa else mobileUa
+        applyClientIdentity(s, tab.desktop, tab.desktop)
 
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -1512,6 +1519,7 @@ class MainActivity : Activity() {
             var title = ""
             var link = ""
             var image = ""
+            var desc = ""
             var tag = ""
             var ev = parser.eventType
             while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
@@ -1522,6 +1530,7 @@ class MainActivity : Activity() {
                         title = ""
                         link = ""
                         image = ""
+                        desc = ""
                     } else if (inItem && tag == "link") {
                         val rel = parser.getAttributeValue(null, "rel")
                         val href = parser.getAttributeValue(null, "href")
@@ -1538,13 +1547,16 @@ class MainActivity : Activity() {
                     if (inItem) {
                         if (tag == "title") title += parser.text
                         else if (tag == "link" && link.isEmpty()) link += parser.text
+                        else if (tag == "description" || tag == "content:encoded" || tag == "summary" || tag == "content") desc += parser.text
                     }
                 } else if (ev == XmlPullParser.END_TAG) {
                     if (parser.name == "item" || parser.name == "entry") {
                         inItem = false
                         val l = link.trim()
                         if (title.isNotBlank() && (l.startsWith("https://") || l.startsWith("http://"))) {
-                            out.add(Triple(title.trim(), l, image.trim()))
+                            var pic = image.trim()
+                            if (pic.isEmpty() && desc.isNotEmpty()) pic = firstImageIn(desc)
+                            out.add(Triple(title.trim(), l, pic))
                         }
                     }
                     tag = ""
@@ -1563,17 +1575,24 @@ class MainActivity : Activity() {
         sb.append("<details class=\"nd\"").append(if (open) " open" else "").append(">")
         sb.append("<summary class=\"nh\"><span>Top news \u00B7 ").append(esc(name)).append("</span></summary>")
         for ((idx, n) in items.withIndex()) {
-            val hasImage = n.third.startsWith("http")
+            var pic = n.third
+            var isVideo = false
+            synchronized(ogCache) {
+                if (!pic.startsWith("http")) pic = ogCache[n.second] ?: ""
+                isVideo = ogVideo.contains(n.second)
+            }
+            val hasImage = pic.startsWith("http")
             val hero = idx == 0 && hasImage
+            val label = (if (isVideo) "\u25B6 " else "") + n.first
             sb.append("<a class=\"nw").append(if (hero) " hero" else "").append("\" href=\"").append(esc(n.second)).append("\">")
             if (hero) {
-                sb.append("<img class=\"hi\" referrerpolicy=\"no-referrer\" src=\"").append(esc(n.third))
+                sb.append("<img class=\"hi\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
                 sb.append("\" onerror=\"this.style.display='none'\">")
-                sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
+                sb.append("<span class=\"nt\">").append(esc(label)).append("</span>")
             } else {
-                sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
+                sb.append("<span class=\"nt\">").append(esc(label)).append("</span>")
                 if (hasImage) {
-                    sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(n.third))
+                    sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
                     sb.append("\" onerror=\"this.style.display='none'\">")
                 }
             }
@@ -1622,6 +1641,7 @@ class MainActivity : Activity() {
                         newsName = name
                         newsHtml = show
                         newsTime = System.currentTimeMillis()
+                        enrichNews(items, name)
                     } else {
                         show = "<div class=\"nh\">Couldn't load news. Check your connection or pick another source in the menu.</div>"
                     }
@@ -1905,6 +1925,99 @@ class MainActivity : Activity() {
         return row
     }
 
+    // ---- pictures and videos read from the article pages themselves ----
+
+    private val ogCache = HashMap<String, String>()
+    private val ogVideo = HashSet<String>()
+
+    private fun firstImageIn(html: String): String {
+        val m = Regex("<img[^>]+src=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html) ?: return ""
+        var u = m.groupValues[1].replace("&amp;", "&").trim()
+        if (u.startsWith("//")) u = "https:" + u
+        return if (isHttp(u)) u else ""
+    }
+
+    // Reads a page's social-sharing tags, for example <meta property="og:image" content="...">.
+    private fun metaContent(html: String, key: String): String? {
+        val keyRe = Regex("(?:property|name)\\s*=\\s*[\"']" + Regex.escape(key) + "[\"']", RegexOption.IGNORE_CASE)
+        val contentRe = Regex("content\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
+        for (m in Regex("<meta\\s[^>]*>", RegexOption.IGNORE_CASE).findAll(html)) {
+            val t = m.value
+            if (!keyRe.containsMatchIn(t)) continue
+            val c = contentRe.find(t) ?: continue
+            val v = c.groupValues[1].replace("&amp;", "&").trim()
+            if (v.isNotEmpty()) return v
+        }
+        return null
+    }
+
+    // Returns the story's main picture and whether the page is a video story.
+    private fun fetchMeta(articleUrl: String): Pair<String, Boolean> {
+        val conn = URL(articleUrl).openConnection() as HttpURLConnection
+        conn.connectTimeout = 4000
+        conn.readTimeout = 4000
+        conn.setRequestProperty("User-Agent", mobileUa)
+        try {
+            val stream = conn.inputStream
+            val buf = ByteArray(160 * 1024)
+            var n = 0
+            while (n < buf.size) {
+                val r = stream.read(buf, n, buf.size - n)
+                if (r <= 0) break
+                n += r
+            }
+            val html = String(buf, 0, n, Charsets.UTF_8)
+            var img = metaContent(html, "og:image") ?: metaContent(html, "twitter:image") ?: ""
+            if (img.startsWith("//")) img = "https:" + img
+            if (!isHttp(img)) img = ""
+            val video = metaContent(html, "og:video") != null ||
+                metaContent(html, "og:video:url") != null ||
+                (metaContent(html, "og:type") ?: "").startsWith("video")
+            return Pair(img, video)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    // Stories whose feed had no picture: load each article page in the background, take its picture,
+    // then redraw the news. Google News links can't be opened this way, so those stay text-only.
+    private fun enrichNews(items: List<Triple<String, String, String>>, name: String) {
+        val todo = items.filter {
+            it.third.isEmpty() && isHttp(it.second) && hostOf(it.second) != "news.google.com" &&
+                synchronized(ogCache) { !ogCache.containsKey(it.second) }
+        }
+        if (todo.isEmpty()) return
+        Thread {
+            val pool = Executors.newFixedThreadPool(4)
+            val latch = CountDownLatch(todo.size)
+            for (item in todo) {
+                pool.execute {
+                    try {
+                        val m = fetchMeta(item.second)
+                        synchronized(ogCache) {
+                            ogCache[item.second] = m.first
+                            if (m.second) ogVideo.add(item.second)
+                        }
+                    } catch (e: Exception) {
+                        synchronized(ogCache) { ogCache[item.second] = "" }
+                    } finally {
+                        latch.countDown()
+                    }
+                }
+            }
+            latch.await(12, TimeUnit.SECONDS)
+            pool.shutdownNow()
+            runOnUiThread {
+                if (isFinishing || isDestroyed || newsItems !== items) return@runOnUiThread
+                val html = buildNews(name, items)
+                newsHtml = html
+                for (t in tabs) {
+                    if (!t.priv && t.url.isEmpty()) injectNews(t.web, html)
+                }
+            }
+        }.start()
+    }
+
     // ---- homepage videos (latest uploads from a news channel's YouTube feed) ----
 
     private val videoFeeds = listOf(
@@ -2073,6 +2186,44 @@ class MainActivity : Activity() {
         newsTime = 0L
         reloadStartIfShown()
         toast("News: " + newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()))
+    }
+
+    // ---- how rweb introduces itself to websites ----
+
+    // Desktop mode used to change only the text of the browser name. The extra "client hint" details
+    // (platform, mobile or not) still said Android, which video sites can treat as a mismatch.
+    private fun desktopMetadata(): UserAgentMetadata {
+        val major = Regex("Chrome/(\\d+)").find(mobileUa)?.groupValues?.get(1) ?: "124"
+        val full = major + ".0.0.0"
+        val brands = listOf(
+            UserAgentMetadata.BrandVersion.Builder().setBrand("Chromium").setMajorVersion(major).setFullVersion(full).build(),
+            UserAgentMetadata.BrandVersion.Builder().setBrand("Google Chrome").setMajorVersion(major).setFullVersion(full).build(),
+            UserAgentMetadata.BrandVersion.Builder().setBrand("Not-A.Brand").setMajorVersion("24").setFullVersion("24.0.0.0").build()
+        )
+        return UserAgentMetadata.Builder()
+            .setBrandVersionList(brands)
+            .setFullVersion(full)
+            .setPlatform("Linux")
+            .setPlatformVersion("6.5.0")
+            .setArchitecture("x86")
+            .setModel("")
+            .setMobile(false)
+            .setBitness(64)
+            .build()
+    }
+
+    private fun applyClientIdentity(s: WebSettings, desktop: Boolean, touchMetadata: Boolean) {
+        s.userAgentString = if (desktop) desktopUa else mobileUa
+        try {
+            if (touchMetadata && WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
+                WebSettingsCompat.setUserAgentMetadata(s, if (desktop) desktopMetadata() else UserAgentMetadata.Builder().build())
+            }
+            // Don't tell every website which app is making the request.
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(s, emptySet())
+            }
+        } catch (e: Exception) {
+        }
     }
 
     // ---- app view (hide toolbars) and home screen shortcuts ----
@@ -2564,7 +2715,7 @@ class MainActivity : Activity() {
     private fun toggleDesktop() {
         val t = current()
         t.desktop = !t.desktop
-        t.web.settings.userAgentString = if (t.desktop) desktopUa else mobileUa
+        applyClientIdentity(t.web.settings, t.desktop, true)
         t.web.reload()
         toast(if (t.desktop) "Desktop site on" else "Desktop site off")
     }
