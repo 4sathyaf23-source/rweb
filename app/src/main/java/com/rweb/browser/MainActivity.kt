@@ -2,7 +2,6 @@ package com.rweb.browser
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.AlertDialog
 import android.app.Dialog
 import android.app.DownloadManager
@@ -33,7 +32,6 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
-import android.os.Parcel
 import android.speech.RecognizerIntent
 import android.provider.MediaStore
 import android.text.Editable
@@ -58,6 +56,7 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -72,7 +71,9 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import android.window.OnBackInvokedDispatcher
+import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.webkit.ProfileStore
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
@@ -92,18 +93,21 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
 
     private class Tab(val web: WebView, val priv: Boolean = false) {
         var title = "New tab"
-        var url = ""
+        // Read from the WebView network thread in shouldInterceptRequest, written on the UI thread.
+        @Volatile var url = ""
         var desktop = false
         var loading = false
         var lastHistoryUrl = ""
         var pendingUrl: String? = null
-        var savedState: Bundle? = null
         val blocked = AtomicInteger(0)
         var readerUrl: String? = null
+        // Set when we upgraded a typed http:// URL to https://. Holds the original http:// URL
+        // so we can fall back to it if the https attempt fails.
+        var httpFallback: String? = null
     }
 
     private val BG = Color.parseColor("#3A0A14")
@@ -153,6 +157,68 @@ class MainActivity : Activity() {
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
+    // single background thread for disk writes (tab list)
+    private val io = Executors.newSingleThreadExecutor()
+
+    // ---- Activity Result API launchers (replace startActivityForResult / requestPermissions) ----
+
+    private val filePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        // parseResult handles both clipData (multi-select) and single data URIs
+        val results = WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data)
+        fileCallback?.onReceiveValue(results)
+        fileCallback = null
+    }
+
+    private val voicePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == RESULT_OK) {
+            val spoken = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spoken.isNullOrBlank()) searchFor(spoken)
+        }
+    }
+
+    private val cameraShot = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val photo = cameraUri
+        if (ok && photo != null) {
+            fileCallback?.onReceiveValue(arrayOf(photo))
+        } else {
+            fileCallback?.onReceiveValue(null)
+            if (photo != null) {
+                try {
+                    contentResolver.delete(photo, null, null)
+                } catch (e: Exception) {
+                }
+            }
+        }
+        fileCallback = null
+        cameraUri = null
+    }
+
+    private val cameraPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            launchCamera()
+        } else {
+            cancelFileChooser()
+            toast("Camera permission is needed to take a photo")
+        }
+    }
+
+    private val mediaPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        pendingMedia?.let { finishMedia(it) }
+        pendingMedia = null
+    }
+
+    private val geoPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val cb = pendingGeoCb
+        val o = pendingGeoOrigin
+        if (cb != null && o != null) {
+            cb.invoke(o, has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION), false)
+        }
+        pendingGeoCb = null
+        pendingGeoOrigin = null
+    }
+
+    private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     // background audio
     private val handler = Handler(Looper.getMainLooper())
     private var mediaPlaying = false
@@ -185,10 +251,10 @@ class MainActivity : Activity() {
         const val DESKTOP_UA_FALLBACK = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
-        
-        // Updated HEAD_A incorporating the custom browser logo styling and header element[span_2](start_span)[span_2](end_span)[span_3](start_span)[span_3](end_span)
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container img{width:56px;height:56px;object-fit:contain}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:24px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><div class="logo-container"><img src="https://www.google.com/s2/favicons?sz=128&domain=rweb.local" onerror="this.style.display='none'"></div><h1>rweb</h1><form action=""""
-        
+
+        // Start page header. The logo is an inline SVG so it needs no network request.
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:24px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
+
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
 
@@ -226,75 +292,64 @@ class MainActivity : Activity() {
 
     private fun currentOrNull(): Tab? = tabs.getOrNull(cur)
 
-    // ---- tab saving (normal tabs only, including their back/forward history) ----
+    // ---- tab saving (normal tabs only; plain JSON, written off the main thread) ----
+    // Per-tab back/forward history is not kept; restored tabs reload their last URL.
 
     private fun saveTabs() {
-        try {
-            val file = File(filesDir, "tabs.bin")
-            val normal = tabs.filter { !it.priv }
-            if (normal.isEmpty()) {
-                file.delete()
-                return
+        val normal = tabs.filter { !it.priv }
+        val file = File(filesDir, "tabs.json")
+        if (normal.isEmpty()) {
+            io.execute { file.delete() }
+            return
+        }
+        val snapshot = try {
+            val arr = JSONArray()
+            for (t in normal) {
+                arr.put(JSONObject().put("t", t.title).put("u", t.url).put("d", t.desktop))
             }
-            val b = Bundle()
-            b.putInt("n", normal.size)
             val c = currentOrNull()
-            b.putInt("cur", if (c != null && !c.priv) normal.indexOf(c) else 0)
-            for (i in normal.indices) {
-                val t = normal[i]
-                b.putString("t" + i, t.title)
-                b.putString("u" + i, t.url)
-                b.putBoolean("d" + i, t.desktop)
-                if (t.url.isNotEmpty() && t.savedState == null) {
-                    val st = Bundle()
-                    if (t.web.saveState(st) != null) b.putBundle("s" + i, st)
-                } else if (t.savedState != null) {
-                    b.putBundle("s" + i, t.savedState)
-                }
-            }
-            val p = Parcel.obtain()
-            try {
-                p.writeBundle(b)
-                file.writeBytes(p.marshall())
-            } finally {
-                p.recycle()
-            }
+            val curIdx = if (c != null && !c.priv) normal.indexOf(c) else 0
+            JSONObject().put("cur", curIdx.coerceAtLeast(0)).put("tabs", arr).toString()
         } catch (e: Exception) {
+            return
+        }
+        io.execute {
+            try {
+                val tmp = File(filesDir, "tabs.json.tmp")
+                tmp.writeText(snapshot)
+                if (!tmp.renameTo(file)) {
+                    file.writeText(snapshot)
+                    tmp.delete()
+                }
+            } catch (e: Exception) {
+            }
         }
     }
 
     private fun restoreSavedTabs() {
+        // the old format used Parcel.marshall(), which isn't safe across OS/WebView updates
+        File(filesDir, "tabs.bin").delete()
         try {
-            val file = File(filesDir, "tabs.bin")
+            val file = File(filesDir, "tabs.json")
             if (!file.exists()) return
-            val bytes = file.readBytes()
-            val p = Parcel.obtain()
-            val loaded: Bundle? = try {
-                p.unmarshall(bytes, 0, bytes.size)
-                p.setDataPosition(0)
-                p.readBundle(MainActivity::class.java.classLoader)
-            } finally {
-                p.recycle()
-            }
-            if (loaded == null) return
-            val b: Bundle = loaded
-            val n = b.getInt("n")
-            for (i in 0 until n) {
+            val root = JSONObject(file.readText())
+            val arr = root.getJSONArray("tabs")
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
                 val web = try {
                     createWebView(false)
                 } catch (e: Exception) {
                     continue
                 }
                 val tab = Tab(web, false)
-                tab.title = b.getString("t" + i) ?: "New tab"
-                tab.url = b.getString("u" + i) ?: ""
-                tab.desktop = b.getBoolean("d" + i)
-                val st = b.getBundle("s" + i)
-                if (st != null) tab.savedState = st else tab.pendingUrl = tab.url
+                tab.title = o.optString("t", "New tab")
+                tab.url = o.optString("u", "")
+                tab.desktop = o.optBoolean("d", false)
+                tab.pendingUrl = tab.url
                 setupWeb(tab)
                 tabs.add(tab)
             }
-            if (tabs.isNotEmpty()) switchTo(b.getInt("cur").coerceIn(0, tabs.size - 1))
+            if (tabs.isNotEmpty()) switchTo(root.optInt("cur", 0).coerceIn(0, tabs.size - 1))
         } catch (e: Exception) {
         }
     }
@@ -313,11 +368,11 @@ class MainActivity : Activity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent?.data?.let { newTab(it.toString()) }
-        if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
+        intent.data?.let { newTab(it.toString()) }
+        if (intent.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
     }
 
     private fun checkMedia() {
@@ -367,7 +422,7 @@ class MainActivity : Activity() {
             .setTitle("Background audio")
             .setMessage("Allow notifications so rweb can show when audio keeps playing in the background?")
             .setPositiveButton("Continue") { _, _ ->
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 102)
+                notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
             .setNegativeButton("Not now", null)
             .show()
@@ -392,9 +447,9 @@ class MainActivity : Activity() {
         } else {
             try {
                 currentOrNull()?.web?.let {
-                        it.onPause()
-                        it.pauseTimers()
-                    }
+                    it.onPause()
+                    it.pauseTimers()
+                }
             } catch (e: Exception) {
             }
         }
@@ -424,6 +479,8 @@ class MainActivity : Activity() {
         val hadPrivate = tabs.any { it.priv }
         for (t in tabs) {
             try {
+                // a WebView must be detached from the view tree before destroy()
+                (t.web.parent as? ViewGroup)?.removeView(t.web)
                 t.web.destroy()
             } catch (e: Exception) {
             }
@@ -432,15 +489,12 @@ class MainActivity : Activity() {
             wipePrivate()
             cleanPrivateDownloads()
         }
+        io.shutdown() // lets any queued tab-list write finish
         super.onDestroy()
     }
 
     private fun registerBackHandler() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) {
-                handleBack()
-            }
-        }
+        onBackPressedDispatcher.addCallback(this) { handleBack() }
     }
 
     private fun handleBack() {
@@ -465,11 +519,6 @@ class MainActivity : Activity() {
         } else {
             finish()
         }
-    }
-
-    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-    override fun onBackPressed() {
-        handleBack()
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -684,10 +733,32 @@ class MainActivity : Activity() {
         address.clearFocus()
     }
 
+    // ---- HTTPS-first navigation ----
+
+    /** Upgrades http:// to https:// unless the host is local/an IP or has an explicit port. */
+    private fun upgradeHttps(u: String): String {
+        val uri = Uri.parse(u)
+        val host = uri.host ?: return u
+        if (uri.scheme != "http") return u
+        if (uri.port != -1) return u
+        if (host == "localhost" || host.endsWith(".local") || host.endsWith(".localhost") ||
+            Regex("""\d{1,3}(\.\d{1,3}){3}""").matches(host) || host.contains(':')
+        ) return u
+        return uri.buildUpon().scheme("https").build().toString()
+    }
+
+    /** Loads [target] in [tab], trying https first and remembering the http URL as a fallback. */
+    private fun navigate(tab: Tab, target: String) {
+        val up = upgradeHttps(target)
+        tab.httpFallback = if (up != target) target else null
+        tab.web.loadUrl(up)
+    }
+
     private fun go(text: String) {
         val target = UrlUtil.toNavigationTarget(text, searchBase(), defaultTld())
         if (target.isEmpty()) return
-        currentOrNull()?.web?.loadUrl(target)
+        val t = currentOrNull() ?: return
+        navigate(t, target)
     }
 
     private fun updateReloadButton() {
@@ -776,7 +847,7 @@ class MainActivity : Activity() {
         setupWeb(tab)
         tabs.add(tab)
         switchTo(tabs.size - 1)
-        if (url.isNullOrEmpty()) loadStart(tab.web) else tab.web.loadUrl(url)
+        if (url.isNullOrEmpty()) loadStart(tab.web) else navigate(tab, url)
     }
 
     private fun switchTo(i: Int) {
@@ -820,12 +891,6 @@ class MainActivity : Activity() {
             window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
-        t.savedState?.let { st ->
-            t.savedState = null
-            if (t.web.restoreState(st) == null) {
-                if (t.url.isEmpty()) loadStart(t.web) else t.web.loadUrl(t.url)
-            }
         }
         t.pendingUrl?.let {
             t.pendingUrl = null
@@ -877,7 +942,7 @@ class MainActivity : Activity() {
         s.useWideViewPort = true
         s.allowFileAccess = false
         s.allowContentAccess = false
-        s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         applyClientIdentity(s, tab.desktop, tab.desktop)
@@ -894,6 +959,7 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 tab.loading = false
+                if (url?.startsWith("https://") == true) tab.httpFallback = null
                 if (tab.readerUrl != null) {
                     view?.evaluateJavascript("(function(){return !!document.getElementById('rweb-reader')})()") { r ->
                         if (r != "true") tab.readerUrl = null
@@ -915,6 +981,16 @@ class MainActivity : Activity() {
                     if (!tab.priv && videosOn()) vidHtml?.let { injectVideos(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                val req = request ?: return
+                if (!req.isForMainFrame || req.url.scheme != "https") return
+                val fb = tab.httpFallback ?: return
+                // only fall back for the host we upgraded
+                if (hostOf(fb) != req.url.host?.lowercase()) return
+                tab.httpFallback = null
+                view?.loadUrl(fb)
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
@@ -989,6 +1065,13 @@ class MainActivity : Activity() {
             ) {
                 handler?.cancel()
                 val failing = error?.url
+                // an upgraded http:// URL whose https version has a bad certificate: fall back to http
+                val fb = tab.httpFallback
+                if (fb != null && failing != null && hostOf(failing) == hostOf(fb)) {
+                    tab.httpFallback = null
+                    view?.loadUrl(fb)
+                    return
+                }
                 if (failing != null && failing == view?.url) {
                     dlg()
                         .setTitle("Connection not secure")
@@ -1188,7 +1271,7 @@ class MainActivity : Activity() {
         }
         pendingMedia?.let { if (it !== req) it.deny() }
         pendingMedia = req
-        requestPermissions(needed.toTypedArray(), 100)
+        mediaPerms.launch(needed.toTypedArray())
     }
 
     private fun finishMedia(req: PermissionRequest) {
@@ -1211,35 +1294,12 @@ class MainActivity : Activity() {
                     pendingGeoCb?.invoke(pendingGeoOrigin ?: origin, false, false)
                     pendingGeoOrigin = origin
                     pendingGeoCb = cb
-                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 101)
+                    geoPerms.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                 }
             }
             .setNegativeButton("Block") { _, _ -> cb.invoke(origin, false, false) }
             .setOnCancelListener { cb.invoke(origin, false, false) }
             .show()
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 100) {
-            pendingMedia?.let { finishMedia(it) }
-            pendingMedia = null
-        } else if (requestCode == 103) {
-            if (has(Manifest.permission.CAMERA)) {
-                launchCamera()
-            } else {
-                cancelFileChooser()
-                toast("Camera permission is needed to take a photo")
-            }
-        } else if (requestCode == 101) {
-            val cb = pendingGeoCb
-            val o = pendingGeoOrigin
-            if (cb != null && o != null) {
-                cb.invoke(o, has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION), false)
-            }
-            pendingGeoCb = null
-            pendingGeoOrigin = null
-        }
     }
 
     private fun searchBase(): String {
@@ -1357,52 +1417,14 @@ class MainActivity : Activity() {
         dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { web.findNext(true) }
     }
 
-    @Suppress("DEPRECATION")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 300 && resultCode == RESULT_OK) {
-            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!spoken.isNullOrBlank()) searchFor(spoken)
-        }
-        if (requestCode == 200 || requestCode == 201) {
-            var results: Array<Uri>? = null
-            if (resultCode == RESULT_OK) {
-                if (requestCode == 201) {
-                    val photo = cameraUri
-                    if (photo != null) results = arrayOf(photo)
-                } else if (data != null) {
-                    val clip = data.clipData
-                    if (clip != null && clip.itemCount > 0) {
-                        results = Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
-                    } else {
-                        val one = data.data
-                        results = if (one != null) arrayOf(one) else WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-                    }
-                }
-            } else if (requestCode == 201) {
-                val photo = cameraUri
-                if (photo != null) {
-                    try {
-                        contentResolver.delete(photo, null, null)
-                    } catch (e: Exception) {
-                    }
-                }
-            }
-            cameraUri = null
-            fileCallback?.onReceiveValue(results)
-            fileCallback = null
-        }
-    }
-
     private fun cancelFileChooser() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
     }
 
-    private fun startPicker(intent: Intent, code: Int) {
+    private fun startPicker(intent: Intent) {
         try {
-            @Suppress("DEPRECATION")
-            startActivityForResult(intent, code)
+            filePicker.launch(intent)
         } catch (e: Exception) {
             cancelFileChooser()
             toast("Can't open the picker")
@@ -1425,13 +1447,13 @@ class MainActivity : Activity() {
                     when (i) {
                         0 -> launchPhotos(multiple)
                         1 -> launchCamera()
-                        else -> startPicker(p.createIntent(), 200)
+                        else -> startPicker(p.createIntent())
                     }
                 }
                 .setOnCancelListener { cancelFileChooser() }
                 .show()
         } else {
-            startPicker(p.createIntent(), 200)
+            startPicker(p.createIntent())
         }
     }
 
@@ -1447,12 +1469,12 @@ class MainActivity : Activity() {
             if (multiple) get.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             get
         }
-        startPicker(intent, 200)
+        startPicker(intent)
     }
 
     private fun launchCamera() {
         if (!has(Manifest.permission.CAMERA)) {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), 103)
+            cameraPerm.launch(Manifest.permission.CAMERA)
             return
         }
         try {
@@ -1466,10 +1488,7 @@ class MainActivity : Activity() {
                 return
             }
             cameraUri = uri
-            val shot = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            shot.putExtra(MediaStore.EXTRA_OUTPUT, uri)
-            shot.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            startPicker(shot, 201)
+            cameraShot.launch(uri)
         } catch (e: Exception) {
             cancelFileChooser()
             toast("Can't start the camera")
@@ -2359,7 +2378,8 @@ class MainActivity : Activity() {
     private fun openAddress(target: String) {
         hideKeyboard()
         hideSuggestions()
-        currentOrNull()?.web?.loadUrl(if (isHttp(target)) target else "https://" + target)
+        val t = currentOrNull() ?: return
+        navigate(t, if (isHttp(target)) target else "https://" + target)
     }
 
     private fun searchFor(q: String) {
@@ -2373,8 +2393,7 @@ class MainActivity : Activity() {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Say what to search")
         try {
-            @Suppress("DEPRECATION")
-            startActivityForResult(i, 300)
+            voicePicker.launch(i)
         } catch (e: Exception) {
             toast("Voice search isn't available on this phone")
         }
@@ -2746,7 +2765,11 @@ class MainActivity : Activity() {
         return row
     }
 
-    private fun loadList(key: String): MutableList<Pair<String, String>> {
+    // ---- history / bookmarks (cached in memory; parsed from prefs only once per key) ----
+
+    private val listCache = HashMap<String, List<Pair<String, String>>>()
+
+    private fun parseList(key: String): List<Pair<String, String>> {
         val out = mutableListOf<Pair<String, String>>()
         try {
             val arr = JSONArray(prefs.getString(key, "[]"))
@@ -2759,7 +2782,11 @@ class MainActivity : Activity() {
         return out
     }
 
+    private fun loadList(key: String): MutableList<Pair<String, String>> =
+        listCache.getOrPut(key) { parseList(key) }.toMutableList()
+
     private fun saveList(key: String, list: List<Pair<String, String>>) {
+        listCache[key] = list.toList()
         val arr = JSONArray()
         for (p in list) arr.put(JSONObject().put("t", p.first).put("u", p.second))
         prefs.edit().putString(key, arr.toString()).apply()
@@ -2997,7 +3024,10 @@ class MainActivity : Activity() {
             t.web.clearSslPreferences()
             if (!t.priv) t.web.clearHistory()
         }
-        File(filesDir, "tabs.bin").delete()
+        io.execute {
+            File(filesDir, "tabs.json").delete()
+            File(filesDir, "tabs.bin").delete()
+        }
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()
