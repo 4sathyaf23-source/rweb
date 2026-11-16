@@ -223,7 +223,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Top 50 News Websites RSS Aggregation Registry
     private val topNewsFeeds = listOf(
         Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
         Pair("CNN Top Stories", "http://rss.cnn.com/rss/edition.rss"),
@@ -277,7 +276,6 @@ class MainActivity : ComponentActivity() {
         Pair("CBC News", "https://www.cbc.ca/webfeed/rss/rss-topstories")
     )
 
-    // Top 100 News Video Channels RSS Registry
     private val topVideoFeeds = listOf(
         Pair("BBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"),
         Pair("CNN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCupvZG-5ko_eiXAupbDfxWw"),
@@ -398,9 +396,6 @@ class MainActivity : ComponentActivity() {
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
 
-    // ---- lifecycle ----
-
-    @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
@@ -431,8 +426,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun currentOrNull(): Tab? = tabs.getOrNull(cur)
-
-    // ---- tab saving ----
 
     private fun saveTabs() {
         val normal = tabs.filter { !it.priv }
@@ -1490,7 +1483,6 @@ class MainActivity : ComponentActivity() {
             sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
-        // Videos container placed ABOVE the Top 50 News container
         sb.append("</div><div id=\"vids\">")
         sb.append(vidHtml ?: "<div class=\"nh\">Loading top news videos...</div>")
         sb.append("</div><div id=\"news\">")
@@ -1678,13 +1670,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---- Videos Aggregation (Top 100 Channels) ----
+    // ---- Asynchronous Streaming Videos Aggregation ----
 
     private fun buildVideos(items: List<Triple<String, String, String>>): String {
         val sb = StringBuilder()
         sb.append("<div class=\"nh\">Top News Videos \u00B7 Top 100 Channels</div><div class=\"vrow\">")
         for (v in items) {
-            // Strict filter: Only display videos whose thumbnail can be viewed
             if (!v.third.startsWith("http")) continue
             sb.append("<a class=\"vc\" href=\"").append(esc(v.second)).append("\"><div class=\"vt\">")
             sb.append("<img referrerpolicy=\"no-referrer\" src=\"").append(esc(v.third))
@@ -1709,50 +1700,46 @@ class MainActivity : ComponentActivity() {
         Thread {
             val aggregatedVideos = mutableListOf<Triple<String, String, String>>()
             val pool = Executors.newFixedThreadPool(12)
-            val latch = CountDownLatch(topVideoFeeds.size)
 
             for (feedPair in topVideoFeeds) {
                 pool.execute {
                     try {
                         val feedResults = fetchNews(feedPair.second)
-                        // Filter strictly for items with valid thumbnail URLs
                         val withThumbnails = feedResults.filter { it.third.startsWith("http") }
-                        synchronized(aggregatedVideos) {
-                            aggregatedVideos.addAll(withThumbnails)
+                        if (withThumbnails.isNotEmpty()) {
+                            synchronized(aggregatedVideos) {
+                                aggregatedVideos.addAll(withThumbnails)
+                                // Distinct and take up to 40 items dynamically
+                                val currentBatch = aggregatedVideos.distinctBy { it.second }.take(40)
+                                val html = buildVideos(currentBatch)
+                                vidHtml = html
+                                vidTime = System.currentTimeMillis()
+
+                                // Stream progress directly to active home tabs as soon as new items arrive
+                                runOnUiThread {
+                                    if (!isFinishing && !isDestroyed) {
+                                        for (t in tabs) {
+                                            if (!t.priv && t.url.isEmpty()) injectVideos(t.web, html)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     } catch (e: Exception) {
-                    } finally {
-                        latch.countDown()
                     }
                 }
             }
-            latch.await(12, TimeUnit.SECONDS)
-            pool.shutdownNow()
-
-            val finalVideos = aggregatedVideos.distinctBy { it.second }.shuffled().take(40)
-
-            runOnUiThread {
-                vidLoading = false
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (finalVideos.isNotEmpty()) {
-                    val html = buildVideos(finalVideos)
-                    vidHtml = html
-                    vidTime = System.currentTimeMillis()
-                    for (t in tabs) {
-                        if (!t.priv && t.url.isEmpty()) injectVideos(t.web, html)
-                    }
-                }
-            }
+            pool.shutdown()
         }.start()
     }
 
-    // ---- News Aggregation (Top 50 Websites) ----
+    // ---- News Aggregation ----
 
     private fun fetchNews(feed: String): List<Triple<String, String, String>> {
         val out = mutableListOf<Triple<String, String, String>>()
         val conn = URL(feed).openConnection() as HttpURLConnection
-        conn.connectTimeout = 4000
-        conn.readTimeout = 4000
+        conn.connectTimeout = 3000
+        conn.readTimeout = 3000
         conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) rweb")
         try {
             val parser = Xml.newPullParser()
@@ -1873,7 +1860,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            latch.await(10, TimeUnit.SECONDS)
+            latch.await(8, TimeUnit.SECONDS)
             pool.shutdownNow()
 
             val finalItems = aggregatedItems.distinctBy { it.second }.shuffled().take(35)
