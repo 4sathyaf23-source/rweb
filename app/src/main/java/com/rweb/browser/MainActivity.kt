@@ -231,15 +231,60 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val feeds = listOf(
+    // Top 50 News Feeds Aggregation Registry
+    private val topNewsFeeds = listOf(
         Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
-        Pair("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml"),
+        Pair("CNN Top Stories", "http://rss.cnn.com/rss/edition.rss"),
+        Pair("New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"),
+        Pair("The Guardian", "https://www.theguardian.com/world/rss"),
+        Pair("Reuters World", "https://www.reutersagency.com/feed/?best-regions=world&post_type=best"),
+        Pair("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
         Pair("Times of India", "https://timesofindia.indiatimes.com/rssfeedstopstories.cms"),
         Pair("The Hindu", "https://www.thehindu.com/news/national/feeder/default.rss"),
-        Pair("Google News (local)", "gnews:local"),
         Pair("NPR", "https://feeds.npr.org/1001/rss.xml"),
-        Pair("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml")
+        Pair("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml"),
+        Pair("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+        Pair("Fox News", "https://moxie.foxnews.com/feedburner/latest.xml"),
+        Pair("Washington Post", "https://feeds.washingtonpost.com/rss/world"),
+        Pair("Wall Street Journal", "https://czesup.com/wsj-rss-feeds/"),
+        Pair("BBC Technology", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+        Pair("TechCrunch", "https://techcrunch.com/feed/"),
+        Pair("The Verge", "https://www.theverge.com/rss/index.xml"),
+        Pair("Wired", "https://www.wired.com/feed/rss"),
+        Pair("Ars Technica", "https://arstechnica.com/feed/"),
+        Pair("Engadget", "https://www.engadget.com/rss.xml"),
+        Pair("CNET", "https://www.cnet.com/rss/all/"),
+        Pair("Mashable", "https://mashable.com/feed.rss"),
+        Pair("Hacker News", "https://news.ycombinator.com/rss"),
+        Pair("VentureBeat", "https://venturebeat.com/feed/"),
+        Pair("Gizmodo", "https://gizmodo.com/rss"),
+        Pair("Bloomberg", "https://www.bloomberg.com/feed/podcast/etf-report.xml"),
+        Pair("Financial Times", "https://www.ft.com/?format=rss"),
+        Pair("Forbes", "https://www.forbes.com/real-time/feed2/"),
+        Pair("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
+        Pair("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
+        Pair("ESPN", "https://www.espn.com/espn/rss/news"),
+        Pair("BBC Sport", "https://feeds.bbci.co.uk/sport/rss.xml"),
+        Pair("Sky Sports", "https://www.skysports.com/core/xml/1,0430,11095,00.xml"),
+        Pair("Bleacher Report", "https://bleacherreport.com/articles/feed"),
+        Pair("Goal.com", "https://www.goal.com/feeds/en/news"),
+        Pair("Variety", "https://variety.com/feed/"),
+        Pair("Hollywood Reporter", "https://www.hollywoodreporter.com/feed/"),
+        Pair("Rolling Stone", "https://www.rollingstone.com/feed/"),
+        Pair("Billboard", "https://www.billboard.com/feed/"),
+        Pair("E! Online", "https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml"),
+        Pair("Nature", "https://www.nature.com/nature.rss"),
+        Pair("ScienceDaily", "https://www.sciencedaily.com/rss/top.xml"),
+        Pair("National Geographic", "https://www.nationalgeographic.com/pages/topic/index.rss"),
+        Pair("Space.com", "https://www.space.com/feeds/all"),
+        Pair("Live Science", "https://www.livescience.com/feeds/all"),
+        Pair("Politico", "https://politico.com/rss/politicopulse.xml"),
+        Pair("The Hill", "https://thehill.com/rss/syndication/1",),
+        Pair("Axios", "https://api.axios.com/feed/"),
+        Pair("BBC Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
+        Pair("CBC News", "https://www.cbc.ca/webfeed/rss/rss-topstories")
     )
+
     private val engines = listOf(
         Pair("Google", "https://www.google.com/search?q="),
         Pair("DuckDuckGo", "https://duckduckgo.com/?q="),
@@ -808,7 +853,6 @@ class MainActivity : ComponentActivity() {
         }
         web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
         refreshNews()
-        refreshVideos()
     }
 
     private fun thirdPartyCookies(): Boolean = prefs.getBoolean("tpc", true)
@@ -978,7 +1022,6 @@ class MainActivity : ComponentActivity() {
                 } else {
                     tab.title = "New tab"
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
-                    if (!tab.priv && videosOn()) vidHtml?.let { injectVideos(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
             }
@@ -1325,14 +1368,7 @@ class MainActivity : ComponentActivity() {
     private fun siteIcons(): Boolean = prefs.getBoolean("icons", true)
 
     private fun startHtml(): String {
-        val amazon = when (newsCountryCode()) {
-            "IN" -> "https://www.amazon.in"
-            "GB" -> "https://www.amazon.co.uk"
-            "AU" -> "https://www.amazon.com.au"
-            "CA" -> "https://www.amazon.ca"
-            "SG" -> "https://www.amazon.sg"
-            else -> "https://www.amazon.com"
-        }
+        val amazon = "https://www.amazon.com"
         val tiles = mutableListOf(
             Pair("YouTube", "https://www.youtube.com"),
             Pair("ChatGPT", "https://chatgpt.com"),
@@ -1367,9 +1403,7 @@ class MainActivity : ComponentActivity() {
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
         sb.append("</div><div id=\"news\">")
-        sb.append(newsHtml ?: "<div class=\"nh\">Loading news...</div>")
-        sb.append("</div><div id=\"vids\">")
-        if (videosOn()) sb.append(vidHtml ?: "")
+        sb.append(newsHtml ?: "<div class=\"nh\">Loading aggregated news...</div>")
         sb.append("</div>").append(searchScript()).append("</body></html>")
         return sb.toString()
     }
@@ -1553,19 +1587,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun feedUrl(): String {
-        val saved = prefs.getString("news", null)
-        if (saved == "https://news.google.com/rss") return "gnews:local"
-        return if (saved != null && feeds.any { it.second == saved }) saved else "gnews:local"
-    }
-
-    private fun feedName(): String = feeds.first { it.second == feedUrl() }.first
-
     private fun fetchNews(feed: String): List<Triple<String, String, String>> {
         val out = mutableListOf<Triple<String, String, String>>()
         val conn = URL(feed).openConnection() as HttpURLConnection
-        conn.connectTimeout = 8000
-        conn.readTimeout = 8000
+        conn.connectTimeout = 4000
+        conn.readTimeout = 4000
         conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) rweb")
         try {
             val parser = Xml.newPullParser()
@@ -1577,7 +1603,7 @@ class MainActivity : ComponentActivity() {
             var desc = ""
             var tag = ""
             var ev = parser.eventType
-            while (ev != XmlPullParser.END_DOCUMENT && out.size < 8) {
+            while (ev != XmlPullParser.END_DOCUMENT && out.size < 5) {
                 if (ev == XmlPullParser.START_TAG) {
                     tag = parser.name
                     if (tag == "item" || tag == "entry") {
@@ -1595,7 +1621,7 @@ class MainActivity : ComponentActivity() {
                         val type = parser.getAttributeValue(null, "type") ?: ""
                         val medium = parser.getAttributeValue(null, "medium") ?: ""
                         if (u != null && image.isEmpty() && (tag == "media:thumbnail" || type.startsWith("image") || medium == "image")) {
-                            image = u.replace("/ace/standard/240/", "/ace/standard/480/").replace("/ace/ws/240/", "/ace/ws/480/")
+                            image = u
                         }
                     }
                 } else if (ev == XmlPullParser.TEXT) {
@@ -1628,7 +1654,7 @@ class MainActivity : ComponentActivity() {
         val open = prefs.getBoolean("news_open", true)
         val sb = StringBuilder()
         sb.append("<details class=\"nd\"").append(if (open) " open" else "").append(">")
-        sb.append("<summary class=\"nh\"><span>Top news \u00B7 ").append(esc(name)).append("</span></summary>")
+        sb.append("<summary class=\"nh\"><span>Top News \u00B7 All Sources</span></summary>")
         for ((idx, n) in items.withIndex()) {
             var pic = n.third
             var isVideo = false
@@ -1636,20 +1662,19 @@ class MainActivity : ComponentActivity() {
                 if (!pic.startsWith("http")) pic = ogCache[n.second] ?: ""
                 isVideo = ogVideo.contains(n.second)
             }
-            val hasImage = pic.startsWith("http")
-            val hero = idx == 0 && hasImage
-            val label = (if (isVideo) "\u25B6 " else "") + n.first
+            // Strict filter requirement: Display ONLY news whose thumbnail can be viewed and NOT videos
+            if (pic.isEmpty() || isVideo) continue
+
+            val hero = idx == 0
             sb.append("<a class=\"nw").append(if (hero) " hero" else "").append("\" href=\"").append(esc(n.second)).append("\">")
             if (hero) {
                 sb.append("<img class=\"hi\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
                 sb.append("\" onerror=\"this.style.display='none'\">")
-                sb.append("<span class=\"nt\">").append(esc(label)).append("</span>")
+                sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
             } else {
-                sb.append("<span class=\"nt\">").append(esc(label)).append("</span>")
-                if (hasImage) {
-                    sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
-                    sb.append("\" onerror=\"this.style.display='none'\">")
-                }
+                sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
+                sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
+                sb.append("\" onerror=\"this.style.display='none'\">")
             }
             sb.append("</a>")
         }
@@ -1668,59 +1693,50 @@ class MainActivity : ComponentActivity() {
         if (newsLoading) return
         if (newsHtml != null && System.currentTimeMillis() - newsTime < 10 * 60 * 1000) return
         newsLoading = true
-        val feed = resolveFeed(feedUrl())
-        val name = feedLabel()
         Thread {
-            val items: List<Triple<String, String, String>>? = try {
-                var l = try {
-                    fetchNews(feed)
-                } catch (e: Exception) {
-                    emptyList<Triple<String, String, String>>()
+            val aggregatedItems = mutableListOf<Triple<String, String, String>>()
+            val pool = Executors.newFixedThreadPool(8)
+            val latch = CountDownLatch(topNewsFeeds.size)
+            
+            for (feedPair in topNewsFeeds) {
+                pool.execute {
+                    try {
+                        val feedResults = fetchNews(feedPair.second)
+                        synchronized(aggregatedItems) {
+                            aggregatedItems.addAll(feedResults)
+                        }
+                    } catch (e: Exception) {
+                        // Ignore failed feeds and continue aggregation
+                    } finally {
+                        latch.countDown()
+                    }
                 }
-                if (l.isEmpty() && feed.contains("/headlines/section/geo/")) l = fetchNews(googleNewsSearchUrl())
-                if (l.isEmpty()) null else l
-            } catch (e: Exception) {
-                null
             }
+            latch.await(10, TimeUnit.SECONDS)
+            pool.shutdownNow()
+
+            // Shuffle or take top items to create a diverse feed
+            val finalItems = aggregatedItems.distinctBy { it.second }.shuffled().take(30)
+
             runOnUiThread {
                 newsLoading = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (feed != resolveFeed(feedUrl())) {
-                    refreshNews()
+                val show: String
+                if (finalItems.isNotEmpty()) {
+                    show = buildNews("Top 50 News Websites", finalItems)
+                    newsItems = finalItems
+                    newsName = "Top 50 News Websites"
+                    newsHtml = show
+                    newsTime = System.currentTimeMillis()
+                    enrichNews(finalItems, newsName)
                 } else {
-                    val show: String
-                    if (items != null) {
-                        show = buildNews(name, items)
-                        newsItems = items
-                        newsName = name
-                        newsHtml = show
-                        newsTime = System.currentTimeMillis()
-                        enrichNews(items, name)
-                    } else {
-                        show = "<div class=\"nh\">Couldn't load news. Check your connection or pick another source in the menu.</div>"
-                    }
-                    for (t in tabs) {
-                        if (!t.priv && t.url.isEmpty()) injectNews(t.web, show)
-                    }
+                    show = "<div class=\"nh\">Couldn't load aggregated news. Check your connection.</div>"
+                }
+                for (t in tabs) {
+                    if (!t.priv && t.url.isEmpty()) injectNews(t.web, show)
                 }
             }
         }.start()
-    }
-
-    private fun chooseNews() {
-        val names = feeds.map { it.first }.toTypedArray()
-        val idx = feeds.indexOfFirst { it.second == feedUrl() }.coerceAtLeast(0)
-        dlg()
-            .setTitle("News source")
-            .setSingleChoiceItems(names, idx) { d, i ->
-                prefs.edit().putString("news", feeds[i].second).apply()
-                newsHtml = null
-                newsItems = null
-                newsTime = 0L
-                d.dismiss()
-                val t = currentOrNull()
-                if (t != null && t.url.isEmpty() && !t.priv) loadStart(t.web)
-            }.show()
     }
 
     private fun setFullscreenMode(on: Boolean) {
@@ -1998,8 +2014,8 @@ class MainActivity : ComponentActivity() {
 
     private fun fetchMeta(articleUrl: String): Pair<String, Boolean> {
         val conn = URL(articleUrl).openConnection() as HttpURLConnection
-        conn.connectTimeout = 4000
-        conn.readTimeout = 4000
+        conn.connectTimeout = 3000
+        conn.readTimeout = 3000
         conn.setRequestProperty("User-Agent", mobileUa)
         try {
             val stream = conn.inputStream
@@ -2025,12 +2041,11 @@ class MainActivity : ComponentActivity() {
 
     private fun enrichNews(items: List<Triple<String, String, String>>, name: String) {
         val todo = items.filter {
-            it.third.isEmpty() && isHttp(it.second) && hostOf(it.second) != "news.google.com" &&
-                synchronized(ogCache) { !ogCache.containsKey(it.second) }
+            it.third.isEmpty() && isHttp(it.second) && synchronized(ogCache) { !ogCache.containsKey(it.second) }
         }
         if (todo.isEmpty()) return
         Thread {
-            val pool = Executors.newFixedThreadPool(4)
+            val pool = Executors.newFixedThreadPool(6)
             val latch = CountDownLatch(todo.size)
             for (item in todo) {
                 pool.execute {
@@ -2047,7 +2062,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            latch.await(12, TimeUnit.SECONDS)
+            latch.await(8, TimeUnit.SECONDS)
             pool.shutdownNow()
             runOnUiThread {
                 if (isFinishing || isDestroyed || newsItems !== items) return@runOnUiThread
@@ -2058,171 +2073,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }.start()
-    }
-
-    private val videoFeeds = listOf(
-        Pair("BBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"),
-        Pair("Al Jazeera English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg")
-    )
-
-    private fun videosOn(): Boolean = prefs.getString("videos_src", videoFeeds[0].first) != "off"
-
-    private fun videoSource(): Pair<String, String> {
-        val saved = prefs.getString("videos_src", videoFeeds[0].first)
-        return videoFeeds.firstOrNull { it.first == saved } ?: videoFeeds[0]
-    }
-
-    private fun buildVideos(name: String, items: List<Triple<String, String, String>>): String {
-        val sb = StringBuilder()
-        sb.append("<div class=\"nh\">Top videos \u00B7 ").append(esc(name)).append("</div><div class=\"vrow\">")
-        for (v in items.take(6)) {
-            sb.append("<a class=\"vc\" href=\"").append(esc(v.second)).append("\"><div class=\"vt\">")
-            if (v.third.startsWith("http")) {
-                sb.append("<img referrerpolicy=\"no-referrer\" src=\"").append(esc(v.third))
-                sb.append("\" onerror=\"this.style.display='none'\">")
-            }
-            sb.append("<span class=\"vp\">\u25B6</span></div><div class=\"vn\">").append(esc(v.first)).append("</div></a>")
-        }
-        sb.append("</div>")
-        return sb.toString()
-    }
-
-    private fun injectVideos(web: WebView, html: String) {
-        web.evaluateJavascript(
-            "(function(){var e=document.getElementById('vids');if(e){e.innerHTML=" + JSONObject.quote(html) + ";}})()",
-            null
-        )
-    }
-
-    private fun refreshVideos() {
-        if (!videosOn() || vidLoading) return
-        if (vidHtml != null && System.currentTimeMillis() - vidTime < 15 * 60 * 1000) return
-        vidLoading = true
-        val src = videoSource()
-        Thread {
-            val items: List<Triple<String, String, String>>? = try {
-                val l = fetchNews(src.second)
-                if (l.isEmpty()) null else l
-            } catch (e: Exception) {
-                null
-            }
-            runOnUiThread {
-                vidLoading = false
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (items != null && videosOn()) {
-                    val html = buildVideos(src.first, items)
-                    vidHtml = html
-                    vidTime = System.currentTimeMillis()
-                    for (t in tabs) {
-                        if (!t.priv && t.url.isEmpty()) injectVideos(t.web, html)
-                    }
-                }
-            }
-        }.start()
-    }
-
-    private fun chooseVideos() {
-        val names = arrayOf("Off") + videoFeeds.map { it.first }
-        val idx = if (!videosOn()) 0 else videoFeeds.indexOfFirst { it.first == videoSource().first } + 1
-        dlg()
-            .setTitle("Homepage videos")
-            .setSingleChoiceItems(names, idx.coerceAtLeast(0)) { d, i ->
-                prefs.edit().putString("videos_src", if (i == 0) "off" else videoFeeds[i - 1].first).apply()
-                vidHtml = null
-                vidTime = 0L
-                d.dismiss()
-                reloadStartIfShown()
-            }
-            .show()
-    }
-
-    private val newsCountries = listOf(
-        Pair("India", "IN"), Pair("United States", "US"), Pair("United Kingdom", "GB"),
-        Pair("Australia", "AU"), Pair("Canada", "CA"), Pair("Ireland", "IE"),
-        Pair("New Zealand", "NZ"), Pair("Singapore", "SG"), Pair("South Africa", "ZA"),
-        Pair("Pakistan", "PK"), Pair("Philippines", "PH"), Pair("Nigeria", "NG"),
-        Pair("Kenya", "KE"), Pair("Malaysia", "MY")
-    )
-
-    private fun newsCountryCode(): String {
-        val saved = prefs.getString("news_country", "auto") ?: "auto"
-        if (saved != "auto" && newsCountries.any { it.second == saved }) return saved
-        val device = Locale.getDefault().country
-        return if (newsCountries.any { it.second == device }) device else "US"
-    }
-
-    private fun newsCountryName(): String = newsCountries.first { it.second == newsCountryCode() }.first
-
-    private fun newsArea(): String = (prefs.getString("news_area", "") ?: "").trim()
-
-    private fun newsEdition(): String {
-        val cc = newsCountryCode()
-        return "hl=en-" + cc + "&gl=" + cc + "&ceid=" + cc + ":en"
-    }
-
-    private fun googleNewsUrl(): String {
-        val area = newsArea()
-        return if (area.isEmpty()) {
-            "https://news.google.com/rss?" + newsEdition()
-        } else {
-            "https://news.google.com/rss/headlines/section/geo/" + Uri.encode(area) + "?" + newsEdition()
-        }
-    }
-
-    private fun googleNewsSearchUrl(): String =
-        "https://news.google.com/rss/search?q=" + Uri.encode(newsArea()) + "&" + newsEdition()
-
-    private fun resolveFeed(url: String): String = if (url == "gnews:local") googleNewsUrl() else url
-
-    private fun feedLabel(): String =
-        if (feedUrl() == "gnews:local") {
-            "Google News \u00B7 " + (if (newsArea().isEmpty()) newsCountryName() else newsArea())
-        } else {
-            feedName()
-        }
-
-    private fun chooseNewsLocation() {
-        val names = arrayOf("Automatic (from phone settings)") + newsCountries.map { it.first }
-        val saved = prefs.getString("news_country", "auto") ?: "auto"
-        val idx = if (saved == "auto") 0 else newsCountries.indexOfFirst { it.second == saved } + 1
-        dlg()
-            .setTitle("News country")
-            .setSingleChoiceItems(names, idx.coerceAtLeast(0)) { d, i ->
-                prefs.edit().putString("news_country", if (i == 0) "auto" else newsCountries[i - 1].second).apply()
-                d.dismiss()
-                askNewsArea()
-            }
-            .show()
-    }
-
-    private fun askNewsArea() {
-        val input = EditText(this)
-        input.setSingleLine()
-        input.hint = "State or city (optional)"
-        input.setText(newsArea())
-        dlg()
-            .setTitle("Local area")
-            .setMessage("Add a state or city to see local stories, or leave it empty for the whole country.")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                prefs.edit().putString("news_area", input.text.toString().trim()).apply()
-                newsLocationChanged()
-            }
-            .setNeutralButton("Clear") { _, _ ->
-                prefs.edit().putString("news_area", "").apply()
-                newsLocationChanged()
-            }
-            .setNegativeButton("Cancel") { _, _ -> newsLocationChanged() }
-            .show()
-    }
-
-    private fun newsLocationChanged() {
-        prefs.edit().putString("news", "gnews:local").apply()
-        newsHtml = null
-        newsItems = null
-        newsTime = 0L
-        reloadStartIfShown()
-        toast("News: " + newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()))
     }
 
     private fun toggleReader() {
@@ -2933,10 +2783,6 @@ class MainActivity : ComponentActivity() {
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
             MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
-            MenuRow("News source", feedName(), false) { chooseNews() },
-            MenuRow("Homepage videos", if (videosOn()) "On \u00B7 " + videoSource().first else "Off", false) { chooseVideos() },
-            MenuRow("News location", newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()), false) { chooseNewsLocation() },
-            MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
             MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false) { toggleIcons() },
             MenuRow("Third-party cookies", if (thirdPartyCookies()) "Allowed" else "Blocked", false) { toggleThirdPartyCookies() },
