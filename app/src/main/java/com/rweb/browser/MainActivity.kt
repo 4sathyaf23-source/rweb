@@ -1693,29 +1693,105 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+        private fun fetchVideosForChannel(channelName: String, feedUrl: String, onVideoFound: (Triple<String, String, String>) -> Unit) {
+        try {
+            val conn = URL(feedUrl).openConnection() as HttpURLConnection
+            conn.connectTimeout = 4000
+            conn.readTimeout = 4000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) rweb")
+            
+            val parser = Xml.newPullParser()
+            parser.setInput(conn.inputStream, null)
+            var inEntry = false
+            var title = ""
+            var link = ""
+            var videoId = ""
+            var thumbnail = ""
+            var tag = ""
+            var ev = parser.eventType
+            
+            while (ev != XmlPullParser.END_DOCUMENT) {
+                if (ev == XmlPullParser.START_TAG) {
+                    tag = parser.name
+                    if (tag == "entry") {
+                        inEntry = true
+                        title = ""
+                        link = ""
+                        videoId = ""
+                        thumbnail = ""
+                    } else if (inEntry && tag == "videoId") {
+                        // Direct YouTube RSS video ID tag
+                        videoId = ""
+                    } else if (inEntry && tag == "link") {
+                        val rel = parser.getAttributeValue(null, "rel")
+                        val href = parser.getAttributeValue(null, "href")
+                        if (href != null && link.isEmpty() && (rel == null || rel == "alternate" || rel == "")) {
+                            link = href
+                        }
+                    } else if (inEntry && (tag == "group" || tag == "media:group")) {
+                        // YouTube media group container
+                    } else if (inEntry && (tag == "thumbnail" || tag == "media:thumbnail")) {
+                        val u = parser.getAttributeValue(null, "url")
+                        if (!u.isNullOrEmpty()) thumbnail = u
+                    }
+                } else if (ev == XmlPullParser.TEXT) {
+                    if (inEntry) {
+                        if (tag == "title") title += parser.text
+                        else if (tag == "link" && link.isEmpty()) link += parser.text
+                        else if (tag == "videoId" || tag.endsWith("videoId")) videoId += parser.text
+                    }
+                } else if (ev == XmlPullParser.END_TAG) {
+                    if (parser.name == "entry") {
+                        inEntry = false
+                        val cleanTitle = title.trim()
+                        var cleanLink = link.trim()
+                        
+                        // Extract video ID from link or fallback pattern if missing
+                        if (videoId.isEmpty() && cleanLink.contains("v=")) {
+                            videoId = cleanLink.substringAfter("v=").substringBefore("&")
+                        } else if (videoId.isEmpty() && cleanLink.contains("youtu.be/")) {
+                            videoId = cleanLink.substringAfter("youtu.be/").substringBefore("?")
+                        }
+
+                        if (videoId.isNotEmpty()) {
+                            if (cleanLink.isEmpty()) cleanLink = "https://www.youtube.com/watch?v=$videoId"
+                            // Guaranteed high-quality YouTube thumbnail fallback
+                            if (thumbnail.isEmpty() || !thumbnail.startsWith("http")) {
+                                thumbnail = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                            }
+                            if (cleanTitle.isNotBlank()) {
+                                onVideoFound(Triple(cleanTitle, cleanLink, thumbnail))
+                            }
+                        }
+                    }
+                    tag = ""
+                }
+                ev = parser.next()
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+        }
+    }
+
     private fun refreshVideos() {
         if (vidLoading) return
         if (vidHtml != null && System.currentTimeMillis() - vidTime < 15 * 60 * 1000) return
         vidLoading = true
         Thread {
             val aggregatedVideos = mutableListOf<Triple<String, String, String>>()
-            val pool = Executors.newFixedThreadPool(12)
+            val pool = Executors.newFixedThreadPool(8)
 
             for (feedPair in topVideoFeeds) {
                 pool.execute {
-                    try {
-                        val feedResults = fetchNews(feedPair.second)
-                        val withThumbnails = feedResults.filter { it.third.startsWith("http") }
-                        if (withThumbnails.isNotEmpty()) {
-                            synchronized(aggregatedVideos) {
-                                aggregatedVideos.addAll(withThumbnails)
-                                // Distinct and take up to 40 items dynamically
-                                val currentBatch = aggregatedVideos.distinctBy { it.second }.take(40)
+                    fetchVideosForChannel(feedPair.first, feedPair.second) { video ->
+                        synchronized(aggregatedVideos) {
+                            if (aggregatedVideos.none { it.second == video.second }) {
+                                aggregatedVideos.add(video)
+                                val currentBatch = aggregatedVideos.shuffled().take(40)
                                 val html = buildVideos(currentBatch)
                                 vidHtml = html
                                 vidTime = System.currentTimeMillis()
 
-                                // Stream progress directly to active home tabs as soon as new items arrive
                                 runOnUiThread {
                                     if (!isFinishing && !isDestroyed) {
                                         for (t in tabs) {
@@ -1725,7 +1801,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                    } catch (e: Exception) {
                     }
                 }
             }
