@@ -5,9 +5,13 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.Dialog
 import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
@@ -74,6 +78,14 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
 import androidx.webkit.ProfileStore
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
@@ -87,6 +99,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -153,6 +166,17 @@ class MainActivity : ComponentActivity() {
     private var vidLoading = false
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
+
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val refreshIntervalMs = 15 * 60 * 1000L // 15 minutes
+
+    private val feedRefreshRunnable = object : Runnable {
+        override fun run() {
+            refreshVideos()
+            refreshNews()
+            refreshHandler.postDelayed(this, refreshIntervalMs)
+        }
+    }
 
     private val io = Executors.newSingleThreadExecutor()
 
@@ -408,9 +432,16 @@ class MainActivity : ComponentActivity() {
         }
         wipePrivate()
         cleanPrivateDownloads()
+        
+        // Load cached feeds for instant offline start
+        vidHtml = loadFeedCache("vids_cache.json")
+        newsHtml = loadFeedCache("news_cache.json")
+
         buildUi()
         registerBackHandler()
         restoreSavedTabs()
+        scheduleBackgroundSync()
+
         val link = intent?.data?.toString()
         if (link != null) newTab(link) else if (tabs.isEmpty()) newTab(null)
         if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
@@ -562,6 +593,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         inBackground = true
         handler.removeCallbacks(mediaPoll)
+        refreshHandler.removeCallbacks(feedRefreshRunnable)
         if (mediaPlaying && !isFinishing) {
             startPlaybackService()
             if (serviceOn) {
@@ -602,10 +634,13 @@ class MainActivity : ComponentActivity() {
         }
         handler.removeCallbacks(mediaPoll)
         handler.post(mediaPoll)
+        refreshHandler.removeCallbacks(feedRefreshRunnable)
+        refreshHandler.postDelayed(feedRefreshRunnable, refreshIntervalMs)
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(mediaPoll)
+        refreshHandler.removeCallbacks(feedRefreshRunnable)
         stopPlaybackService()
         val hadPrivate = tabs.any { it.priv }
         for (t in tabs) {
@@ -698,7 +733,7 @@ class MainActivity : ComponentActivity() {
         address = EditText(this)
         address.background = null
         address.setSingleLine()
-        address.hint = "Enter address"
+        address.hint = "Enter address or search"
         address.setHintTextColor(MUTE)
         address.setTextColor(INK)
         address.textSize = 15f
@@ -719,7 +754,11 @@ class MainActivity : ComponentActivity() {
         address.setOnEditorActionListener { _, actionId, event ->
             val enter = event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
             if (actionId == EditorInfo.IME_ACTION_GO || enter) {
-                go(address.text.toString())
+                val input = address.text.toString()
+                val currentWebView = currentOrNull()?.web
+                if (currentWebView != null) {
+                    handleUrlOrSearchInput(input, currentWebView)
+                }
                 hideKeyboard()
                 true
             } else {
@@ -880,6 +919,25 @@ class MainActivity : ComponentActivity() {
         tab.web.loadUrl(up)
     }
 
+    private fun handleUrlOrSearchInput(input: String, webView: WebView) {
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) return
+
+        val targetUrl = when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> {
+                trimmed
+            }
+            (trimmed.contains(".") && !trimmed.contains(" ") && (trimmed.startsWith("www.") || trimmed.endsWith(".com") || trimmed.endsWith(".org") || trimmed.endsWith(".net") || trimmed.endsWith(".in") || trimmed.endsWith(".io") || trimmed.endsWith(".dev"))) -> {
+                "https://$trimmed"
+            }
+            else -> {
+                val encodedQuery = URLEncoder.encode(trimmed, "UTF-8")
+                searchBase() + encodedQuery
+            }
+        }
+        webView.loadUrl(targetUrl)
+    }
+
     private fun go(text: String) {
         val target = UrlUtil.toNavigationTarget(text, searchBase(), defaultTld())
         if (target.isEmpty()) return
@@ -999,7 +1057,7 @@ class MainActivity : ComponentActivity() {
         topBar.setBackgroundColor(barColor)
         statusSpacer.setBackgroundColor(barColor)
         bottomBg.setColor(barColor)
-        address.hint = if (t.priv) "Private tab: enter address" else "Enter address"
+        address.hint = if (t.priv) "Private tab: enter address" else "Enter address or search"
         if (lastPrivUi != t.priv) {
             lastPrivUi = t.priv
             address.imeOptions = if (t.priv) {
@@ -1054,6 +1112,133 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // --- Local Caching Helpers ---
+    private fun saveFeedCache(filename: String, content: String) {
+        io.execute {
+            try {
+                File(filesDir, filename).writeText(content)
+            } catch (e: Exception) {}
+        }
+    }
+
+    private fun loadFeedCache(filename: String): String? {
+        try {
+            val file = File(filesDir, filename)
+            if (file.exists()) return file.readText()
+        } catch (e: Exception) {}
+        return null
+    }
+
+    // --- Read State & Click Tracking ---
+    private fun getReadArticles(): MutableSet<String> {
+        return prefs.getStringSet("read_articles", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+    }
+
+    private fun markArticleAsRead(url: String) {
+        val readSet = getReadArticles()
+        readSet.add(url)
+        prefs.edit().putStringSet("read_articles", readSet).apply()
+    }
+
+    private fun getClickCount(url: String): Int {
+        return prefs.getInt("clicks_$url", 0)
+    }
+
+    private fun incrementClickCount(url: String) {
+        val count = getClickCount(url)
+        prefs.edit().putInt("clicks_$url", count + 1).apply()
+    }
+
+    // --- Personalization & Interests ---
+    private fun addUserInterest(title: String) {
+        val words = title.lowercase().split(Regex("\\s+"))
+            .filter { it.length > 3 && it !in listOf("news", "video", "watch", "with", "from", "this", "that") }
+        val counts = prefs.getString("user_interests", "{}")
+        try {
+            val json = JSONObject(counts)
+            for (w in words) {
+                json.put(w, json.optInt(w, 0) + 1)
+            }
+            prefs.edit().putString("user_interests", json.toString()).apply()
+        } catch (e: Exception) {}
+    }
+
+    private fun getRelevanceScore(title: String): Int {
+        return try {
+            val json = JSONObject(prefs.getString("user_interests", "{}"))
+            var score = 0
+            for (w in title.lowercase().split(Regex("\\s+"))) {
+                score += json.optInt(w, 0)
+            }
+            score
+        } catch (e: Exception) { 0 }
+    }
+
+    // --- Custom Feeds Management ---
+    private fun getCustomFeeds(key: String): MutableList<Pair<String, String>> {
+        val list = mutableListOf<Pair<String, String>>()
+        try {
+            val arr = JSONArray(prefs.getString(key, "[]"))
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(Pair(obj.getString("name"), obj.getString("url")))
+            }
+        } catch (e: Exception) {}
+        return list
+    }
+
+    private fun saveCustomFeeds(key: String, list: List<Pair<String, String>>) {
+        try {
+            val arr = JSONArray()
+            for (item in list) {
+                arr.put(JSONObject().put("name", item.first).put("url", item.second))
+            }
+            prefs.edit().putString(key, arr.toString()).apply()
+        } catch (e: Exception) {}
+    }
+
+    // --- Categories & Filtering ---
+    private fun getCategory(title: String): String {
+        val t = title.lowercase()
+        return when {
+            t.contains("tech") || t.contains("ai") || t.contains("software") || t.contains("app") || t.contains("phone") || t.contains("apple") || t.contains("google") -> "Tech"
+            t.contains("sport") || t.contains("football") || t.contains("cricket") || t.contains("match") || t.contains("game") || t.contains("league") -> "Sports"
+            t.contains("business") || t.contains("market") || t.contains("economy") || t.contains("stock") || t.contains("bank") -> "Business"
+            t.contains("science") || t.contains("space") || t.contains("nasa") || t.contains("study") || t.contains("research") -> "Science"
+            else -> "General"
+        }
+    }
+
+    private fun getCategoryChipsHtml(activeCategory: String): String {
+        val categories = listOf("All", "Tech", "Sports", "Business", "Science")
+        val sb = StringBuilder("<div style=\"display:flex;gap:8px;overflow-x:auto;padding:12px 0;width:100%;max-width:520px;\">")
+        for (cat in categories) {
+            val isActive = cat == activeCategory
+            val bg = if (isActive) "var(--acc)" else "var(--fld)"
+            val fg = if (isActive) "#fff" else "var(--fg)"
+            sb.append("<button onclick=\"filterCategory('$cat')\" style=\"padding:6px 14px;border-radius:14px;border:0;background:$bg;color:$fg;font-size:12px;cursor:pointer;box-shadow:var(--sh);white-space:nowrap;\">$cat</button>")
+        }
+        sb.append("</div>")
+        return sb.toString()
+    }
+
+    private fun getCategoryFilterScript(): String {
+        return """
+            <script>
+            function filterCategory(cat) {
+                var items = document.querySelectorAll('.nw, .vc');
+                items.forEach(function(item) {
+                    if (cat === 'All' || item.getAttribute('data-cat') === cat) {
+                        item.style.display = '';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+            </script>
+        """
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWeb(tab: Tab) {
         val web = tab.web
@@ -1072,6 +1257,15 @@ class MainActivity : ComponentActivity() {
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         applyClientIdentity(s, tab.desktop, tab.desktop)
+
+        web.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun onClicked(url: String, title: String) {
+                incrementClickCount(url)
+                markArticleAsRead(url)
+                addUserInterest(title)
+            }
+        }, "AndroidInterface")
 
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -1111,6 +1305,14 @@ class MainActivity : ComponentActivity() {
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 val req = request ?: return
+                if (req.isForMainFrame) {
+                    val url = req.url.toString()
+                    val offlineHtml = getOfflineArticle(url)
+                    if (offlineHtml != null) {
+                        view?.loadDataWithBaseURL(url, offlineHtml, "text/html", "UTF-8", null)
+                        return
+                    }
+                }
                 if (!req.isForMainFrame || req.url.scheme != "https") return
                 val fb = tab.httpFallback ?: return
                 if (hostOf(fb) != req.url.host?.lowercase()) return
@@ -1145,6 +1347,13 @@ class MainActivity : ComponentActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val req = request ?: return false
                 val u = req.url
+                val urlStr = u.toString()
+                if (urlStr.contains("web.whatsapp.com")) {
+                    view?.settings?.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                } else {
+                    view?.settings?.userAgentString = if (tab.desktop) desktopUa else mobileUa
+                }
+
                 val scheme = u.scheme ?: return false
                 if (scheme == "rweb") {
                     when (u.host) {
@@ -1477,8 +1686,12 @@ class MainActivity : ComponentActivity() {
             val host = Uri.parse(t.second).host ?: ""
             sb.append("<span class=\"ic\">").append(esc(letter))
             if (icons && host.isNotEmpty()) {
-                sb.append("<img referrerpolicy=\"no-referrer\" src=\"https://www.google.com/s2/favicons?sz=128&amp;domain=")
-                sb.append(esc(Uri.encode(host))).append("\" onerror=\"this.style.display='none'\">")
+                val iconSrc = when {
+                    t.first.equals("Gmail", true) -> "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico"
+                    t.first.equals("WhatsApp", true) -> "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
+                    else -> "https://www.google.com/s2/favicons?sz=128&amp;domain=" + Uri.encode(host)
+                }
+                sb.append("<img referrerpolicy=\"no-referrer\" src=\"").append(esc(iconSrc)).append("\" onerror=\"this.style.display='none'\">")
             }
             sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
@@ -1674,15 +1887,22 @@ class MainActivity : ComponentActivity() {
 
     private fun buildVideos(items: List<Triple<String, String, String>>): String {
         val sb = StringBuilder()
-        sb.append("<div class=\"nh\">Top News Videos \u00B7 Top 100 Channels</div><div class=\"vrow\">")
-        for (v in items) {
+        sb.append("<div class=\"nh\">Trending Videos</div>")
+        sb.append(getCategoryChipsHtml("All"))
+        sb.append("<div class=\"vrow\">")
+        
+        val sortedItems = items.sortedByDescending { getClickCount(it.second) + (getRelevanceScore(it.first) * 3) }
+        for (v in sortedItems) {
             if (!v.third.startsWith("http")) continue
-            sb.append("<a class=\"vc\" href=\"").append(esc(v.second)).append("\"><div class=\"vt\">")
-            sb.append("<img referrerpolicy=\"no-referrer\" src=\"").append(esc(v.third))
-            sb.append("\" onerror=\"this.closest('.vc').style.display='none'\">")
-            sb.append("<span class=\"vp\">\u25B6</span></div><div class=\"vn\">").append(esc(v.first)).append("</div></a>")
+            val category = getCategory(v.first)
+            sb.append("<a class=\"vc\" data-cat=\"").append(category).append("\" href=\"").append(esc(v.second))
+              .append("\" onclick=\"window.AndroidInterface ? window.AndroidInterface.onClicked('").append(esc(v.second)).append("', '").append(esc(v.first)).append("') : null;\">")
+              .append("<div class=\"vt\"><img referrerpolicy=\"no-referrer\" src=\"").append(esc(v.third))
+              .append("\" onerror=\"this.closest('.vc').style.display='none'\">")
+              .append("<span class=\"vp\">\u25B6</span></div><div class=\"vn\">").append(esc(v.first)).append("</div></a>")
         }
         sb.append("</div>")
+        sb.append(getCategoryFilterScript())
         return sb.toString()
     }
 
@@ -1693,7 +1913,7 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-        private fun fetchVideosForChannel(channelName: String, feedUrl: String, onVideoFound: (Triple<String, String, String>) -> Unit) {
+    private fun fetchVideosForChannel(channelName: String, feedUrl: String, onVideoFound: (Triple<String, String, String>) -> Unit) {
         try {
             val conn = URL(feedUrl).openConnection() as HttpURLConnection
             conn.connectTimeout = 4000
@@ -1710,6 +1930,8 @@ class MainActivity : ComponentActivity() {
             var tag = ""
             var ev = parser.eventType
             
+            val readSet = getReadArticles()
+
             while (ev != XmlPullParser.END_DOCUMENT) {
                 if (ev == XmlPullParser.START_TAG) {
                     tag = parser.name
@@ -1719,17 +1941,12 @@ class MainActivity : ComponentActivity() {
                         link = ""
                         videoId = ""
                         thumbnail = ""
-                    } else if (inEntry && tag == "videoId") {
-                        // Direct YouTube RSS video ID tag
-                        videoId = ""
                     } else if (inEntry && tag == "link") {
                         val rel = parser.getAttributeValue(null, "rel")
                         val href = parser.getAttributeValue(null, "href")
                         if (href != null && link.isEmpty() && (rel == null || rel == "alternate" || rel == "")) {
                             link = href
                         }
-                    } else if (inEntry && (tag == "group" || tag == "media:group")) {
-                        // YouTube media group container
                     } else if (inEntry && (tag == "thumbnail" || tag == "media:thumbnail")) {
                         val u = parser.getAttributeValue(null, "url")
                         if (!u.isNullOrEmpty()) thumbnail = u
@@ -1746,7 +1963,6 @@ class MainActivity : ComponentActivity() {
                         val cleanTitle = title.trim()
                         var cleanLink = link.trim()
                         
-                        // Extract video ID from link or fallback pattern if missing
                         if (videoId.isEmpty() && cleanLink.contains("v=")) {
                             videoId = cleanLink.substringAfter("v=").substringBefore("&")
                         } else if (videoId.isEmpty() && cleanLink.contains("youtu.be/")) {
@@ -1755,12 +1971,13 @@ class MainActivity : ComponentActivity() {
 
                         if (videoId.isNotEmpty()) {
                             if (cleanLink.isEmpty()) cleanLink = "https://www.youtube.com/watch?v=$videoId"
-                            // Guaranteed high-quality YouTube thumbnail fallback
-                            if (thumbnail.isEmpty() || !thumbnail.startsWith("http")) {
-                                thumbnail = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
-                            }
-                            if (cleanTitle.isNotBlank()) {
-                                onVideoFound(Triple(cleanTitle, cleanLink, thumbnail))
+                            if (!readSet.contains(cleanLink)) {
+                                if (thumbnail.isEmpty() || !thumbnail.startsWith("http")) {
+                                    thumbnail = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                                }
+                                if (cleanTitle.isNotBlank()) {
+                                    onVideoFound(Triple(cleanTitle, cleanLink, thumbnail))
+                                }
                             }
                         }
                     }
@@ -1775,22 +1992,29 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshVideos() {
         if (vidLoading) return
-        if (vidHtml != null && System.currentTimeMillis() - vidTime < 15 * 60 * 1000) return
         vidLoading = true
         Thread {
             val aggregatedVideos = mutableListOf<Triple<String, String, String>>()
             val pool = Executors.newFixedThreadPool(8)
+            val allVideoFeeds = topVideoFeeds + getCustomFeeds("custom_video_feeds")
 
-            for (feedPair in topVideoFeeds) {
+            for (feedPair in allVideoFeeds) {
                 pool.execute {
                     fetchVideosForChannel(feedPair.first, feedPair.second) { video ->
                         synchronized(aggregatedVideos) {
-                            if (aggregatedVideos.none { it.second == video.second }) {
+                            val videoId = if (video.second.contains("v=")) video.second.substringAfter("v=").substringBefore("&") else video.second
+                            val isDuplicate = aggregatedVideos.any { existing ->
+                                existing.second == video.second || 
+                                (existing.second.contains("v=") && existing.second.substringAfter("v=").substringBefore("&") == videoId)
+                            }
+                            if (!isDuplicate) {
                                 aggregatedVideos.add(video)
-                                val currentBatch = aggregatedVideos.shuffled().take(40)
+                                val sorted = aggregatedVideos.sortedByDescending { getClickCount(it.second) + (getRelevanceScore(it.first) * 3) }
+                                val currentBatch = sorted.take(40)
                                 val html = buildVideos(currentBatch)
                                 vidHtml = html
                                 vidTime = System.currentTimeMillis()
+                                saveFeedCache("vids_cache.json", html)
 
                                 runOnUiThread {
                                     if (!isFinishing && !isDestroyed) {
@@ -1875,11 +2099,17 @@ class MainActivity : ComponentActivity() {
 
     private fun buildNews(name: String, items: List<Triple<String, String, String>>): String {
         val open = prefs.getBoolean("news_open", true)
+        val readSet = getReadArticles()
+        val constrainUnread = items.filter { !readSet.contains(it.second) }
+        val sortedItems = constrainUnread.sortedByDescending { getClickCount(it.second) + (getRelevanceScore(it.first) * 3) }
+
         val sb = StringBuilder()
         sb.append("<details class=\"nd\"").append(if (open) " open" else "").append(">")
-        sb.append("<summary class=\"nh\"><span>Top News \u00B7 Top 50 Websites</span></summary>")
+        sb.append("<summary class=\"nh\"><span>Latest News</span></summary>")
+        sb.append(getCategoryChipsHtml("All"))
+        
         var renderIndex = 0
-        for (n in items) {
+        for (n in sortedItems) {
             var pic = n.third
             var isVideo = false
             synchronized(ogCache) {
@@ -1890,7 +2120,9 @@ class MainActivity : ComponentActivity() {
 
             val hero = renderIndex == 0
             renderIndex++
-            sb.append("<a class=\"nw").append(if (hero) " hero" else "").append("\" href=\"").append(esc(n.second)).append("\">")
+            val category = getCategory(n.first)
+            sb.append("<a class=\"nw").append(if (hero) " hero" else "").append("\" data-cat=\"").append(category).append("\" href=\"").append(esc(n.second))
+              .append("\" onclick=\"window.AndroidInterface ? window.AndroidInterface.onClicked('").append(esc(n.second)).append("', '").append(esc(n.first)).append("') : null;\">")
             if (hero) {
                 sb.append("<img class=\"hi\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
                 sb.append("\" onerror=\"this.closest('.nw').style.display='none'\">")
@@ -1915,19 +2147,26 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshNews() {
         if (newsLoading) return
-        if (newsHtml != null && System.currentTimeMillis() - newsTime < 10 * 60 * 1000) return
         newsLoading = true
         Thread {
             val aggregatedItems = mutableListOf<Triple<String, String, String>>()
             val pool = Executors.newFixedThreadPool(8)
-            val latch = CountDownLatch(topNewsFeeds.size)
+            val allNewsFeeds = topNewsFeeds + getCustomFeeds("custom_news_feeds")
+            val latch = CountDownLatch(allNewsFeeds.size)
             
-            for (feedPair in topNewsFeeds) {
+            for (feedPair in allNewsFeeds) {
                 pool.execute {
                     try {
                         val feedResults = fetchNews(feedPair.second)
                         synchronized(aggregatedItems) {
-                            aggregatedItems.addAll(feedResults)
+                            for (item in feedResults) {
+                                val cleanTitle = item.first.lowercase().replace(Regex("[^a-z0-9]"), "")
+                                val isDuplicate = aggregatedItems.any { existing ->
+                                    existing.second == item.second || 
+                                    existing.first.lowercase().replace(Regex("[^a-z0-9]"), "") == cleanTitle
+                                }
+                                if (!isDuplicate) aggregatedItems.add(item)
+                            }
                         }
                     } catch (e: Exception) {
                     } finally {
@@ -1935,27 +2174,27 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            latch.await(8, TimeUnit.SECONDS)
+            latch.await(10, TimeUnit.SECONDS)
             pool.shutdownNow()
 
-            val finalItems = aggregatedItems.distinctBy { it.second }.shuffled().take(35)
+            val readSet = getReadArticles()
+            val unread = aggregatedItems.filter { !readSet.contains(it.second) }
+            val sortedItems = unread.sortedByDescending { getClickCount(it.second) + (getRelevanceScore(it.first) * 3) }.take(35)
 
             runOnUiThread {
                 newsLoading = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                val show: String
-                if (finalItems.isNotEmpty()) {
-                    show = buildNews("Top 50 News Websites", finalItems)
-                    newsItems = finalItems
-                    newsName = "Top 50 News Websites"
+                if (sortedItems.isNotEmpty()) {
+                    val show = buildNews("Top News Websites", sortedItems)
+                    newsItems = sortedItems
+                    newsName = "Top News Websites"
                     newsHtml = show
                     newsTime = System.currentTimeMillis()
-                    enrichNews(finalItems, newsName)
-                } else {
-                    show = "<div class=\"nh\">Couldn't load aggregated news. Check your connection.</div>"
-                }
-                for (t in tabs) {
-                    if (!t.priv && t.url.isEmpty()) injectNews(t.web, show)
+                    saveFeedCache("news_cache.json", show)
+                    enrichNews(sortedItems, newsName)
+                    for (t in tabs) {
+                        if (!t.priv && t.url.isEmpty()) injectNews(t.web, show)
+                    }
                 }
             }
         }.start()
@@ -2290,6 +2529,7 @@ class MainActivity : ComponentActivity() {
                 if (isFinishing || isDestroyed || newsItems !== items) return@runOnUiThread
                 val html = buildNews(name, items)
                 newsHtml = html
+                saveFeedCache("news_cache.json", html)
                 for (t in tabs) {
                     if (!t.priv && t.url.isEmpty()) injectNews(t.web, html)
                 }
@@ -2326,9 +2566,28 @@ class MainActivity : ComponentActivity() {
             } else {
                 t.readerUrl = pageUrl
                 val html = ReaderMode.page(obj.optString("title"), obj.optString("site"), obj.optString("html"))
+                saveOfflineArticle(pageUrl, obj.optString("title"), obj.optString("html"))
                 t.web.loadDataWithBaseURL(pageUrl, html, "text/html", "utf-8", pageUrl)
             }
         }
+    }
+
+    private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
+        io.execute {
+            try {
+                val file = File(filesDir, "offline_" + url.hashCode() + ".html")
+                val fullDoc = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${esc(title)}</title></head><body><h1>${esc(title)}</h1>$contentHtml</body></html>"
+                file.writeText(fullDoc)
+            } catch (e: Exception) {}
+        }
+    }
+
+    private fun getOfflineArticle(url: String): String? {
+        try {
+            val file = File(filesDir, "offline_" + url.hashCode() + ".html")
+            if (file.exists()) return file.readText()
+        } catch (e: Exception) {}
+        return null
     }
 
     private fun mobileMetadata(): UserAgentMetadata {
@@ -2668,6 +2927,91 @@ class MainActivity : ComponentActivity() {
         pausedHosts = set
         reloadCurrent()
         toast(if (paused) "Blocking paused on " + host else "Blocking active on " + host)
+    }
+
+    // --- Custom Feed Manager Dialogs ---
+    private fun showCustomFeedManager(isVideos: Boolean) {
+        val key = if (isVideos) "custom_video_feeds" else "custom_news_feeds"
+        val title = if (isVideos) "Manage Custom Video Channels" else "Manage Custom News Feeds"
+        
+        val feeds = getCustomFeeds(key).toMutableList()
+        val labels = feeds.map { "${it.first}\n${it.second}" }.toMutableList()
+        labels.add("+ Add New Feed")
+
+        dlg()
+            .setTitle(title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == feeds.size) {
+                    showAddFeedDialog(isVideos)
+                } else {
+                    val selected = feeds[which]
+                    dlg()
+                        .setTitle("Delete feed?")
+                        .setMessage(selected.first)
+                        .setPositiveButton("Delete") { _, _ ->
+                            feeds.removeAt(which)
+                            saveCustomFeeds(key, feeds)
+                            toast("Feed removed")
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showAddFeedDialog(isVideos: Boolean) {
+        val key = if (isVideos) "custom_video_feeds" else "custom_news_feeds"
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setPadding(dp(20), dp(10), dp(20), dp(10))
+
+        val nameInput = EditText(this)
+        nameInput.hint = "Feed or Channel Name"
+        nameInput.singleLine = true
+        layout.addView(nameInput)
+
+        val urlInput = EditText(this)
+        urlInput.hint = "RSS or YouTube Feed URL"
+        urlInput.singleLine = true
+        layout.addView(urlInput)
+
+        dlg()
+            .setTitle(if (isVideos) "Add Video Channel" else "Add News Feed")
+            .setView(layout)
+            .setPositiveButton("Add") { _, _ ->
+                val name = nameInput.text.toString().trim()
+                val url = urlInput.text.toString().trim()
+                if (name.isNotEmpty() && url.isNotEmpty()) {
+                    val feeds = getCustomFeeds(key).toMutableList()
+                    feeds.add(Pair(name, url))
+                    saveCustomFeeds(key, feeds)
+                    toast("Feed added successfully")
+                    if (isVideos) refreshVideos() else refreshNews()
+                } else {
+                    toast("Fields cannot be empty")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // --- WorkManager Background Sync ---
+    private fun scheduleBackgroundSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val syncRequest = PeriodicWorkRequestBuilder<FeedSyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "rweb_feed_sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            syncRequest
+        )
     }
 
     private val SHEET = Color.parseColor("#2A0710")
@@ -3010,6 +3354,8 @@ class MainActivity : ComponentActivity() {
             MenuRow("Ad & tracker blocking", if (adBlockOn) "On \u00B7 " + t.blocked.get() + " blocked" else "Off", false) { toggleAdBlock() },
             MenuRow("Blocking on this site", if (hostOf(t.url)?.let { pausedHosts.contains(it) } == true) "Paused" else "Active", false) { togglePauseHere() },
             MenuRow("Desktop site", if (t.desktop) "On" else "Off", false) { toggleDesktop() },
+            MenuRow("Manage custom video channels", null, false) { showCustomFeedManager(true) },
+            MenuRow("Manage custom news feeds", null, false) { showCustomFeedManager(false) },
             MenuRow("Toolbars", if (barsHidden) "Hidden" else "Visible", false) { setBarsHidden(!barsHidden) },
             MenuRow("Add to home screen", null, false) { addToHomeScreen() },
             MenuRow("Copy link", null, false) { copyLink() },
@@ -3094,6 +3440,8 @@ class MainActivity : ComponentActivity() {
         io.execute {
             File(filesDir, "tabs.json").delete()
             File(filesDir, "tabs.bin").delete()
+            File(filesDir, "vids_cache.json").delete()
+            File(filesDir, "news_cache.json").delete()
         }
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
