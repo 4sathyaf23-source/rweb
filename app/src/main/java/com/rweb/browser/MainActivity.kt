@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
 
     private class Tab(val web: WebView, val priv: Boolean = false) {
         var title = "New tab"
-        // Read from the WebView network thread in shouldInterceptRequest, written on the UI thread.
         @Volatile var url = ""
         var desktop = false
         var loading = false
@@ -105,8 +104,6 @@ class MainActivity : ComponentActivity() {
         var pendingUrl: String? = null
         val blocked = AtomicInteger(0)
         var readerUrl: String? = null
-        // Set when we upgraded a typed http:// URL to https://. Holds the original http:// URL
-        // so we can fall back to it if the https attempt fails.
         var httpFallback: String? = null
     }
 
@@ -157,13 +154,9 @@ class MainActivity : ComponentActivity() {
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
-    // single background thread for disk writes (tab list)
     private val io = Executors.newSingleThreadExecutor()
 
-    // ---- Activity Result API launchers (replace startActivityForResult / requestPermissions) ----
-
     private val filePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        // parseResult handles both clipData (multi-select) and single data URIs
         val results = WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data)
         fileCallback?.onReceiveValue(results)
         fileCallback = null
@@ -219,7 +212,6 @@ class MainActivity : ComponentActivity() {
 
     private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    // background audio
     private val handler = Handler(Looper.getMainLooper())
     private var mediaPlaying = false
     private var inBackground = false
@@ -231,7 +223,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Top 50 News Feeds Aggregation Registry
+    // Top 50 News Websites RSS Aggregation Registry
     private val topNewsFeeds = listOf(
         Pair("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
         Pair("CNN Top Stories", "http://rss.cnn.com/rss/edition.rss"),
@@ -279,10 +271,114 @@ class MainActivity : ComponentActivity() {
         Pair("Space.com", "https://www.space.com/feeds/all"),
         Pair("Live Science", "https://www.livescience.com/feeds/all"),
         Pair("Politico", "https://politico.com/rss/politicopulse.xml"),
-        Pair("The Hill", "https://thehill.com/rss/syndication/1",),
+        Pair("The Hill", "https://thehill.com/rss/syndication/1"),
         Pair("Axios", "https://api.axios.com/feed/"),
         Pair("BBC Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
         Pair("CBC News", "https://www.cbc.ca/webfeed/rss/rss-topstories")
+    )
+
+    // Top 100 News Video Channels RSS Registry
+    private val topVideoFeeds = listOf(
+        Pair("BBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"),
+        Pair("CNN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCupvZG-5ko_eiXAupbDfxWw"),
+        Pair("Al Jazeera English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg"),
+        Pair("NBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg"),
+        Pair("ABC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q"),
+        Pair("CBS News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC8p1vwvWtl6T73JiExfWs1g"),
+        Pair("MSNBC", "https://www.youtube.com/feeds/videos.xml?channel_id=UCaXkIU1QidjPwiAYu6GcHjg"),
+        Pair("Sky News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCoMdktPbSTixAyNGwb-UYkQ"),
+        Pair("Fox News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXIJgqnII2ZOINSWNOGFThA"),
+        Pair("DW News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg"),
+        Pair("France 24 English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCQfwfsi5VrQ8yKZ-UWmAEFg"),
+        Pair("Reuters", "https://www.youtube.com/feeds/videos.xml?channel_id=UChqUTb7kYRX8-EiaN3XFrSQ"),
+        Pair("Associated Press", "https://www.youtube.com/feeds/videos.xml?channel_id=UC52X5wxOL_s5yw0dQk7NtgA"),
+        Pair("Bloomberg", "https://www.youtube.com/feeds/videos.xml?channel_id=UCUMZ7gohGI9HcU9VNsr2FJQ"),
+        Pair("CNBC", "https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA"),
+        Pair("The Guardian", "https://www.youtube.com/feeds/videos.xml?channel_id=UCHpw8xwDNhU9gdohEcJu4aA"),
+        Pair("New York Times", "https://www.youtube.com/feeds/videos.xml?channel_id=UCqnbDFdCpuN8CMEg0VuEBqA"),
+        Pair("Washington Post", "https://www.youtube.com/feeds/videos.xml?channel_id=UCHd62-u_v4DvJ8TCFtpi4GA"),
+        Pair("Wall Street Journal", "https://www.youtube.com/feeds/videos.xml?channel_id=UCK7tptUDHh-RYDsdxO1-5QQ"),
+        Pair("The Economist", "https://www.youtube.com/feeds/videos.xml?channel_id=UC0p5jTq6Xx_DosDFxVXnWaQ"),
+        Pair("Financial Times", "https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw"),
+        Pair("USA TODAY", "https://www.youtube.com/feeds/videos.xml?channel_id=UCP6HGa63sBC7-KHtkme-p-g"),
+        Pair("TIME", "https://www.youtube.com/feeds/videos.xml?channel_id=UC8Su5vZCXWRag13H53zWVwA"),
+        Pair("Newsweek", "https://www.youtube.com/feeds/videos.xml?channel_id=UC2a35q7eyzkfoIusBzdH4Hw"),
+        Pair("VICE News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCZaT_X_mc0BI-djXOlfhqWQ"),
+        Pair("Vox", "https://www.youtube.com/feeds/videos.xml?channel_id=UCLXo7UDZvByw2ixzpQCufnA"),
+        Pair("POLITICO", "https://www.youtube.com/feeds/videos.xml?channel_id=UCgjtvMmHXbutALaw9XzRkAg"),
+        Pair("CBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCuFFtHWoLl5fauMMD5Ww2jA"),
+        Pair("Global News", "https://www.youtube.com/feeds/videos.xml?channel_id=UChLtXXpo4Ge1ReTEboVvTDg"),
+        Pair("CTV News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCi7Zk9baY1tv03gL6n12p-w"),
+        Pair("ABC News Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UCVgO39Bk5sMo66-6o6Spn6Q"),
+        Pair("7NEWS Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UC5T7D-Dh1eDGtsAFCuwv_Sw"),
+        Pair("9 News Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UCIYLOcEUX6TbBo7HQVF2PKA"),
+        Pair("Sky News Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UCO0akufu9MOzyz3nvGIXAAw"),
+        Pair("NDTV", "https://www.youtube.com/feeds/videos.xml?channel_id=UCZFMm1mMw0F81Z37aaEzTUA"),
+        Pair("India Today", "https://www.youtube.com/feeds/videos.xml?channel_id=UCYPvAwZP8pZhSMW8qs7cVCw"),
+        Pair("WION", "https://www.youtube.com/feeds/videos.xml?channel_id=UC_gUM8rL-Lrg6O3adPW9K1g"),
+        Pair("Firstpost", "https://www.youtube.com/feeds/videos.xml?channel_id=UCz8QaiQxApLq8sLNcszYyJw"),
+        Pair("Times Now", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6RJ7-PaXg6TIH2BzZfTV7w"),
+        Pair("Republic World", "https://www.youtube.com/feeds/videos.xml?channel_id=UCwqusr8YDwM-3mEYTDeJHzw"),
+        Pair("CNN-News18", "https://www.youtube.com/feeds/videos.xml?channel_id=UCef1-8eOpJgud7szVPlZQAQ"),
+        Pair("ANI News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCtFQDgA8J8_iiwc5-KoAQlg"),
+        Pair("DD India", "https://www.youtube.com/feeds/videos.xml?channel_id=UCGDQNvybfDDeGTf4GtigXaw"),
+        Pair("Aaj Tak", "https://www.youtube.com/feeds/videos.xml?channel_id=UCt4t-jeY85JegMlZ-E5UWtA"),
+        Pair("ABP News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCRWFSbif-RFENbBrSiez1DA"),
+        Pair("IndiaTV", "https://www.youtube.com/feeds/videos.xml?channel_id=UCttspZesZIDEwwpVIgoZtWQ"),
+        Pair("Zee News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCIvaYmXn910QMdemBG3v1pQ"),
+        Pair("News18 India", "https://www.youtube.com/feeds/videos.xml?channel_id=UCPP3etACgdUWvizcES1dJ8Q"),
+        Pair("The Lallantop", "https://www.youtube.com/feeds/videos.xml?channel_id=UCx8Z14PpntdaxCt2hakbQLQ"),
+        Pair("NDTV India", "https://www.youtube.com/feeds/videos.xml?channel_id=UC9CYT9gSNLevX5ey2_6CK0Q"),
+        Pair("TRT World", "https://www.youtube.com/feeds/videos.xml?channel_id=UC7fWeaHhqgM4Ry-RMpM2YYw"),
+        Pair("CNA", "https://www.youtube.com/feeds/videos.xml?channel_id=UC83jt4dlz1Gjl58fzQrrKZg"),
+        Pair("South China Morning Post", "https://www.youtube.com/feeds/videos.xml?channel_id=UC4SUWiuTj6fnrkEhWCN40gw"),
+        Pair("NHK WORLD-JAPAN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCSPEjw8F2nQDtmUKPFNF7_A"),
+        Pair("Arirang News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCzznO4xSV8BKnUBPyswtCUw"),
+        Pair("KBS World News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC5BMQOsAB8hKUyHu9KI6yig"),
+        Pair("Euronews", "https://www.youtube.com/feeds/videos.xml?channel_id=UCSrZ3UV4jOidv8ppoVuvW9Q"),
+        Pair("i24NEWS English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCvHDpsWKADrDia0c99X37vg"),
+        Pair("Channel 4 News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCTrQ7HXWRRxr76OsehR_2rg"),
+        Pair("ITV News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCFQgi22MaCa4E4YNJUWOPGg"),
+        Pair("The Telegraph", "https://www.youtube.com/feeds/videos.xml?channel_id=UCPgLNge0xqQHWM5B5EFH9Cg"),
+        Pair("The Independent", "https://www.youtube.com/feeds/videos.xml?channel_id=UCshwRhftAwXZ8wTf73_60lA"),
+        Pair("GBNews", "https://www.youtube.com/feeds/videos.xml?channel_id=UC05b5M9K9K-V2O69b8V3b-Q"),
+        Pair("60 Minutes", "https://www.youtube.com/feeds/videos.xml?channel_id=UCsN32BtMd0IoByjJRNF12cw"),
+        Pair("CBS Mornings", "https://www.youtube.com/feeds/videos.xml?channel_id=UC-SJ6nODDmufqBzPBwCvYvQ"),
+        Pair("CBS Sunday Morning", "https://www.youtube.com/feeds/videos.xml?channel_id=UCVT1tPkR-fUVlO652EcO3ow"),
+        Pair("TODAY", "https://www.youtube.com/feeds/videos.xml?channel_id=UChDKyKQ59fYz3JO2fl0Z6sg"),
+        Pair("Good Morning America", "https://www.youtube.com/feeds/videos.xml?channel_id=UCH1oRy1dINbMVp3UFWrKP0w"),
+        Pair("PBS NewsHour", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ"),
+        Pair("FRONTLINE PBS", "https://www.youtube.com/feeds/videos.xml?channel_id=UC3ScyryU9rc9sezkjpLD9Tg"),
+        Pair("The Verge", "https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ"),
+        Pair("TechCrunch", "https://www.youtube.com/feeds/videos.xml?channel_id=UCCjyq_K1Xwfg8Lndy7lKMpA"),
+        Pair("CNET", "https://www.youtube.com/feeds/videos.xml?channel_id=UCOmcA3f_RrH6b9NmcNa4tdg"),
+        Pair("WIRED", "https://www.youtube.com/feeds/videos.xml?channel_id=UCftwRNsjfRo08xYE31tkiyw"),
+        Pair("Engadget", "https://www.youtube.com/feeds/videos.xml?channel_id=UC-6012p_083P3w6mR127bSg"),
+        Pair("Mashable", "https://www.youtube.com/feeds/videos.xml?channel_id=UC33_tB18qR26iR18vM90t_Q"),
+        Pair("MIT Technology Review", "https://www.youtube.com/feeds/videos.xml?channel_id=UCgy4Mf_tlZGqesYNqPNxjPw"),
+        Pair("Bloomberg Television", "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg"),
+        Pair("Bloomberg Technology", "https://www.youtube.com/feeds/videos.xml?channel_id=UCrM7B7SL_g1edFOnmj-SDKg"),
+        Pair("Yahoo Finance", "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg"),
+        Pair("Forbes", "https://www.youtube.com/feeds/videos.xml?channel_id=UCmh7afjfKQMeY69261o2w8Q"),
+        Pair("Fortune Magazine", "https://www.youtube.com/feeds/videos.xml?channel_id=UCP2gdh7HfjgCoi8lO50dA5w"),
+        Pair("Business Insider", "https://www.youtube.com/feeds/videos.xml?channel_id=UCcyq283he07B7_KUX07mmtA"),
+        Pair("ESPN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg"),
+        Pair("Sky Sports News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCNAf1k0yIjyGu3k9BwAg3lg"),
+        Pair("CBS Sports", "https://www.youtube.com/feeds/videos.xml?channel_id=UCET00YnetHT7tOpu12v8jxg"),
+        Pair("NBC Sports", "https://www.youtube.com/feeds/videos.xml?channel_id=UCqZQlzSHbVJrwrn5XvzrzcA"),
+        Pair("FOX Sports", "https://www.youtube.com/feeds/videos.xml?channel_id=UCw05gJBvjg92964tL0M6xXw"),
+        Pair("Variety", "https://www.youtube.com/feeds/videos.xml?channel_id=UCgRQHK8T60w-1yV6iW91p2w"),
+        Pair("The Hollywood Reporter", "https://www.youtube.com/feeds/videos.xml?channel_id=UCZ8Sxmkweh65HetaZfR8YuA"),
+        Pair("Entertainment Tonight", "https://www.youtube.com/feeds/videos.xml?channel_id=UCdtXPiqI2cLorKaPrfpKc4g"),
+        Pair("Access Hollywood", "https://www.youtube.com/feeds/videos.xml?channel_id=UCiKGMZZmSjG-9GJ22_2_52g"),
+        Pair("E! News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCjDsbbzHnTrXk4_26-85P9A"),
+        Pair("National Geographic", "https://www.youtube.com/feeds/videos.xml?channel_id=UCpVm7bg6pXKo1Pr6k5kxG9A"),
+        Pair("NASA", "https://www.youtube.com/feeds/videos.xml?channel_id=UCLA_DiR1FfKNvjuUpBHmylQ"),
+        Pair("Smithsonian Channel", "https://www.youtube.com/feeds/videos.xml?channel_id=UC-266w47B78-p-4G8wP6kCg"),
+        Pair("Discovery", "https://www.youtube.com/feeds/videos.xml?channel_id=UCqOoboPm3uhY_YXhvhmL-WA"),
+        Pair("New Scientist", "https://www.youtube.com/feeds/videos.xml?channel_id=UC3-R2B9177M-X0S_w1o1Z3w"),
+        Pair("Seeker", "https://www.youtube.com/feeds/videos.xml?channel_id=UCzWQYUVCpZqtN93H8RR44Qw"),
+        Pair("Vox Borders", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6107grRI4m0o2-emgoDnAA")
     )
 
     private val engines = listOf(
@@ -297,8 +393,7 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        // Start page header. The logo is an inline SVG so it needs no network request.
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:24px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
 
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
@@ -337,8 +432,7 @@ class MainActivity : ComponentActivity() {
 
     private fun currentOrNull(): Tab? = tabs.getOrNull(cur)
 
-    // ---- tab saving (normal tabs only; plain JSON, written off the main thread) ----
-    // Per-tab back/forward history is not kept; restored tabs reload their last URL.
+    // ---- tab saving ----
 
     private fun saveTabs() {
         val normal = tabs.filter { !it.priv }
@@ -372,7 +466,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun restoreSavedTabs() {
-        // the old format used Parcel.marshall(), which isn't safe across OS/WebView updates
         File(filesDir, "tabs.bin").delete()
         try {
             val file = File(filesDir, "tabs.json")
@@ -524,7 +617,6 @@ class MainActivity : ComponentActivity() {
         val hadPrivate = tabs.any { it.priv }
         for (t in tabs) {
             try {
-                // a WebView must be detached from the view tree before destroy()
                 (t.web.parent as? ViewGroup)?.removeView(t.web)
                 t.web.destroy()
             } catch (e: Exception) {
@@ -534,7 +626,7 @@ class MainActivity : ComponentActivity() {
             wipePrivate()
             cleanPrivateDownloads()
         }
-        io.shutdown() // lets any queued tab-list write finish
+        io.shutdown()
         super.onDestroy()
     }
 
@@ -778,9 +870,6 @@ class MainActivity : ComponentActivity() {
         address.clearFocus()
     }
 
-    // ---- HTTPS-first navigation ----
-
-    /** Upgrades http:// to https:// unless the host is local/an IP or has an explicit port. */
     private fun upgradeHttps(u: String): String {
         val uri = Uri.parse(u)
         val host = uri.host ?: return u
@@ -792,7 +881,6 @@ class MainActivity : ComponentActivity() {
         return uri.buildUpon().scheme("https").build().toString()
     }
 
-    /** Loads [target] in [tab], trying https first and remembering the http URL as a fallback. */
     private fun navigate(tab: Tab, target: String) {
         val up = upgradeHttps(target)
         tab.httpFallback = if (up != target) target else null
@@ -852,6 +940,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
+        refreshVideos()
         refreshNews()
     }
 
@@ -1021,6 +1110,7 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     tab.title = "New tab"
+                    if (!tab.priv) vidHtml?.let { injectVideos(tab.web, it) }
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
@@ -1030,7 +1120,6 @@ class MainActivity : ComponentActivity() {
                 val req = request ?: return
                 if (!req.isForMainFrame || req.url.scheme != "https") return
                 val fb = tab.httpFallback ?: return
-                // only fall back for the host we upgraded
                 if (hostOf(fb) != req.url.host?.lowercase()) return
                 tab.httpFallback = null
                 view?.loadUrl(fb)
@@ -1108,7 +1197,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 handler?.cancel()
                 val failing = error?.url
-                // an upgraded http:// URL whose https version has a bad certificate: fall back to http
                 val fb = tab.httpFallback
                 if (fb != null && failing != null && hostOf(failing) == hostOf(fb)) {
                     tab.httpFallback = null
@@ -1402,6 +1490,9 @@ class MainActivity : ComponentActivity() {
             sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
+        // Videos container placed ABOVE the Top 50 News container
+        sb.append("</div><div id=\"vids\">")
+        sb.append(vidHtml ?: "<div class=\"nh\">Loading top news videos...</div>")
         sb.append("</div><div id=\"news\">")
         sb.append(newsHtml ?: "<div class=\"nh\">Loading aggregated news...</div>")
         sb.append("</div>").append(searchScript()).append("</body></html>")
@@ -1587,6 +1678,76 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ---- Videos Aggregation (Top 100 Channels) ----
+
+    private fun buildVideos(items: List<Triple<String, String, String>>): String {
+        val sb = StringBuilder()
+        sb.append("<div class=\"nh\">Top News Videos \u00B7 Top 100 Channels</div><div class=\"vrow\">")
+        for (v in items) {
+            // Strict filter: Only display videos whose thumbnail can be viewed
+            if (!v.third.startsWith("http")) continue
+            sb.append("<a class=\"vc\" href=\"").append(esc(v.second)).append("\"><div class=\"vt\">")
+            sb.append("<img referrerpolicy=\"no-referrer\" src=\"").append(esc(v.third))
+            sb.append("\" onerror=\"this.closest('.vc').style.display='none'\">")
+            sb.append("<span class=\"vp\">\u25B6</span></div><div class=\"vn\">").append(esc(v.first)).append("</div></a>")
+        }
+        sb.append("</div>")
+        return sb.toString()
+    }
+
+    private fun injectVideos(web: WebView, html: String) {
+        web.evaluateJavascript(
+            "(function(){var e=document.getElementById('vids');if(e){e.innerHTML=" + JSONObject.quote(html) + ";}})()",
+            null
+        )
+    }
+
+    private fun refreshVideos() {
+        if (vidLoading) return
+        if (vidHtml != null && System.currentTimeMillis() - vidTime < 15 * 60 * 1000) return
+        vidLoading = true
+        Thread {
+            val aggregatedVideos = mutableListOf<Triple<String, String, String>>()
+            val pool = Executors.newFixedThreadPool(12)
+            val latch = CountDownLatch(topVideoFeeds.size)
+
+            for (feedPair in topVideoFeeds) {
+                pool.execute {
+                    try {
+                        val feedResults = fetchNews(feedPair.second)
+                        // Filter strictly for items with valid thumbnail URLs
+                        val withThumbnails = feedResults.filter { it.third.startsWith("http") }
+                        synchronized(aggregatedVideos) {
+                            aggregatedVideos.addAll(withThumbnails)
+                        }
+                    } catch (e: Exception) {
+                    } finally {
+                        latch.countDown()
+                    }
+                }
+            }
+            latch.await(12, TimeUnit.SECONDS)
+            pool.shutdownNow()
+
+            val finalVideos = aggregatedVideos.distinctBy { it.second }.shuffled().take(40)
+
+            runOnUiThread {
+                vidLoading = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (finalVideos.isNotEmpty()) {
+                    val html = buildVideos(finalVideos)
+                    vidHtml = html
+                    vidTime = System.currentTimeMillis()
+                    for (t in tabs) {
+                        if (!t.priv && t.url.isEmpty()) injectVideos(t.web, html)
+                    }
+                }
+            }
+        }.start()
+    }
+
+    // ---- News Aggregation (Top 50 Websites) ----
+
     private fun fetchNews(feed: String): List<Triple<String, String, String>> {
         val out = mutableListOf<Triple<String, String, String>>()
         val conn = URL(feed).openConnection() as HttpURLConnection
@@ -1654,27 +1815,28 @@ class MainActivity : ComponentActivity() {
         val open = prefs.getBoolean("news_open", true)
         val sb = StringBuilder()
         sb.append("<details class=\"nd\"").append(if (open) " open" else "").append(">")
-        sb.append("<summary class=\"nh\"><span>Top News \u00B7 All Sources</span></summary>")
-        for ((idx, n) in items.withIndex()) {
+        sb.append("<summary class=\"nh\"><span>Top News \u00B7 Top 50 Websites</span></summary>")
+        var renderIndex = 0
+        for (n in items) {
             var pic = n.third
             var isVideo = false
             synchronized(ogCache) {
                 if (!pic.startsWith("http")) pic = ogCache[n.second] ?: ""
                 isVideo = ogVideo.contains(n.second)
             }
-            // Strict filter requirement: Display ONLY news whose thumbnail can be viewed and NOT videos
-            if (pic.isEmpty() || isVideo) continue
+            if (!pic.startsWith("http") || isVideo) continue
 
-            val hero = idx == 0
+            val hero = renderIndex == 0
+            renderIndex++
             sb.append("<a class=\"nw").append(if (hero) " hero" else "").append("\" href=\"").append(esc(n.second)).append("\">")
             if (hero) {
                 sb.append("<img class=\"hi\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
-                sb.append("\" onerror=\"this.style.display='none'\">")
+                sb.append("\" onerror=\"this.closest('.nw').style.display='none'\">")
                 sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
             } else {
                 sb.append("<span class=\"nt\">").append(esc(n.first)).append("</span>")
                 sb.append("<img class=\"ni\" referrerpolicy=\"no-referrer\" src=\"").append(esc(pic))
-                sb.append("\" onerror=\"this.style.display='none'\">")
+                sb.append("\" onerror=\"this.closest('.nw').style.display='none'\">")
             }
             sb.append("</a>")
         }
@@ -1706,7 +1868,6 @@ class MainActivity : ComponentActivity() {
                             aggregatedItems.addAll(feedResults)
                         }
                     } catch (e: Exception) {
-                        // Ignore failed feeds and continue aggregation
                     } finally {
                         latch.countDown()
                     }
@@ -1715,8 +1876,7 @@ class MainActivity : ComponentActivity() {
             latch.await(10, TimeUnit.SECONDS)
             pool.shutdownNow()
 
-            // Shuffle or take top items to create a diverse feed
-            val finalItems = aggregatedItems.distinctBy { it.second }.shuffled().take(30)
+            val finalItems = aggregatedItems.distinctBy { it.second }.shuffled().take(35)
 
             runOnUiThread {
                 newsLoading = false
@@ -2615,8 +2775,6 @@ class MainActivity : ComponentActivity() {
         return row
     }
 
-    // ---- history / bookmarks (cached in memory; parsed from prefs only once per key) ----
-
     private val listCache = HashMap<String, List<Pair<String, String>>>()
 
     private fun parseList(key: String): List<Pair<String, String>> {
@@ -2783,6 +2941,7 @@ class MainActivity : ComponentActivity() {
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
             MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
+            MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
             MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false) { toggleIcons() },
             MenuRow("Third-party cookies", if (thirdPartyCookies()) "Allowed" else "Blocked", false) { toggleThirdPartyCookies() },
