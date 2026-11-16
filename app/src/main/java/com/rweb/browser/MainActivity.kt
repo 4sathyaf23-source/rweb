@@ -185,7 +185,10 @@ class MainActivity : Activity() {
         const val DESKTOP_UA_FALLBACK = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}h1{color:var(--acc);font-size:44px;margin:0 0 28px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:24px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><h1>rweb</h1><form action=""""
+        
+        // Updated HEAD_A incorporating the custom browser logo styling and header element[span_2](start_span)[span_2](end_span)[span_3](start_span)[span_3](end_span)
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container img{width:56px;height:56px;object-fit:contain}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#news{width:100%;max-width:520px;margin-top:32px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:24px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><div class="logo-container"><img src="https://www.google.com/s2/favicons?sz=128&domain=rweb.local" onerror="this.style.display='none'"></div><h1>rweb</h1><form action=""""
+        
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
 
@@ -242,7 +245,6 @@ class MainActivity : Activity() {
                 b.putString("t" + i, t.title)
                 b.putString("u" + i, t.url)
                 b.putBoolean("d" + i, t.desktop)
-                // Tabs showing the start page have no page history worth keeping.
                 if (t.url.isNotEmpty() && t.savedState == null) {
                     val st = Bundle()
                     if (t.web.saveState(st) != null) b.putBundle("s" + i, st)
@@ -297,7 +299,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // Private downloads are tracked and removed when the last private tab closes.
     private fun cleanPrivateDownloads() {
         try {
             val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
@@ -318,10 +319,6 @@ class MainActivity : Activity() {
         intent?.data?.let { newTab(it.toString()) }
         if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
     }
-
-    // ---- background audio ----
-    // While the app is open we check every few seconds whether the current page is playing audio or video.
-    // If it is when you leave the app, a foreground service keeps the process alive and the page is not paused.
 
     private fun checkMedia() {
         val web = currentOrNull()?.web ?: return
@@ -438,8 +435,6 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    // ---- back handling (works with predictive back on Android 13+) ----
-
     private fun registerBackHandler() {
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) {
@@ -472,30 +467,15 @@ class MainActivity : Activity() {
         }
     }
 
-    // Only called on Android 12 and below. Newer versions use the callback above.
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
         handleBack()
     }
 
-    // ---- UI ----
-
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private fun toast(msg: String) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun btn(label: String, desc: String, onClick: () -> Unit): TextView {
-        val t = TextView(this)
-        t.text = label
-        t.contentDescription = desc
-        t.textSize = 20f
-        t.setTextColor(INK)
-        t.gravity = Gravity.CENTER
-        t.setPadding(dp(12), dp(8), dp(12), dp(8))
-        t.setOnClickListener { onClick() }
-        return t
     }
 
     private fun setSpacer(v: View, h: Int) {
@@ -523,7 +503,6 @@ class MainActivity : Activity() {
         top.setBackgroundColor(BAR)
         top.setPadding(dp(12), dp(8), dp(12), dp(10))
 
-        // Address pill: [security icon] [address] [reload / stop]
         val pillBox = LinearLayout(this)
         pillBox.orientation = LinearLayout.HORIZONTAL
         pillBox.gravity = Gravity.CENTER_VERTICAL
@@ -588,7 +567,6 @@ class MainActivity : Activity() {
 
         content = FrameLayout(this)
 
-        // Floating bottom bar: back, forward, home, tabs, menu
         bottomBg = GradientDrawable()
         bottomBg.setColor(BAR)
         bottomBg.cornerRadius = dp(28).toFloat()
@@ -675,7 +653,6 @@ class MainActivity : Activity() {
         fullscreenHolder.visibility = View.GONE
         frame.addView(fullscreenHolder, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        // Edge-to-edge. Required on Android 15+, and consistent on 11+.
         if (Build.VERSION.SDK_INT >= 30) {
             window.setDecorFitsSystemWindows(false)
             frame.setOnApplyWindowInsetsListener { _, insets ->
@@ -689,7 +666,6 @@ class MainActivity : Activity() {
         }
         setContentView(frame)
         if (Build.VERSION.SDK_INT >= 30) {
-            // Bars are dark, so use light icons.
             window.insetsController?.setSystemBarsAppearance(
                 0,
                 WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
@@ -948,7 +924,6 @@ class MainActivity : Activity() {
                 val pageHost = hostOf(tab.url)
                 if (pageHost != null) {
                     if (pausedHosts.contains(pageHost)) return null
-                    // Never block the site you are on or its own subdomains.
                     if (host == pageHost || host.endsWith("." + pageHost) || pageHost.endsWith("." + host)) return null
                 }
                 if (!AdBlock.isBlocked(host)) return null
@@ -1095,7 +1070,6 @@ class MainActivity : Activity() {
                 fullscreenHolder.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                 fullscreenHolder.visibility = View.VISIBLE
                 setFullscreenMode(true)
-                // Tall videos (Shorts, Reels) stay upright; wide videos rotate to landscape.
                 tab.web.evaluateJavascript(VIDEO_SHAPE_JS) { r ->
                     val parts = (r ?: "").replace("\"", "").split("x")
                     val w = parts.getOrNull(0)?.toIntOrNull() ?: 0
@@ -1184,8 +1158,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // ---- site permissions (camera, microphone, location) ----
-
     private fun has(p: String): Boolean =
         checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
@@ -1270,8 +1242,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // ---- start page, search engine, extra tools ----
-
     private fun searchBase(): String {
         val saved = prefs.getString("search", null)
         return if (saved != null && engines.any { it.second == saved }) saved else engines[0].second
@@ -1294,7 +1264,6 @@ class MainActivity : Activity() {
 
     private fun siteIcons(): Boolean = prefs.getBoolean("icons", true)
 
-    // Tiles show a letter first. With site icons on, the icon (from Google's favicon service) loads on top of it.
     private fun startHtml(): String {
         val amazon = when (newsCountryCode()) {
             "IN" -> "https://www.amazon.in"
@@ -1411,7 +1380,6 @@ class MainActivity : Activity() {
                     }
                 }
             } else if (requestCode == 201) {
-                // Camera cancelled: remove the empty picture entry we created.
                 val photo = cameraUri
                 if (photo != null) {
                     try {
@@ -1425,8 +1393,6 @@ class MainActivity : Activity() {
             fileCallback = null
         }
     }
-
-    // ---- file, photo and camera pickers ----
 
     private fun cancelFileChooser() {
         fileCallback?.onReceiveValue(null)
@@ -1453,7 +1419,6 @@ class MainActivity : Activity() {
         } else if (imagesOnly) {
             launchPhotos(multiple)
         } else if (hasImages) {
-            // The site accepts photos and other files, so let the person choose.
             dlg()
                 .setTitle("Attach")
                 .setItems(arrayOf("Photos", "Camera", "Files")) { _, i ->
@@ -1486,7 +1451,6 @@ class MainActivity : Activity() {
     }
 
     private fun launchCamera() {
-        // The system camera needs our CAMERA permission when the app declares it.
         if (!has(Manifest.permission.CAMERA)) {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), 103)
             return
@@ -1511,8 +1475,6 @@ class MainActivity : Activity() {
             toast("Can't start the camera")
         }
     }
-
-    // ---- private tabs and news ----
 
     private fun privateHtml(): String {
         return HEAD_A.replaceFirst("<html>", "<html class=\"dark\">") + esc(searchBase().substringBefore("?q=")) + HEAD_B +
@@ -1560,7 +1522,6 @@ class MainActivity : Activity() {
         toast(if (on) "Third-party cookies allowed" else "Third-party cookies blocked")
     }
 
-    // deleteProfile throws while the profile is still in use, so retry shortly after the last private WebView is destroyed.
     private fun wipePrivate(retries: Int = 3) {
         try {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
@@ -1697,7 +1658,6 @@ class MainActivity : Activity() {
                 } catch (e: Exception) {
                     emptyList<Triple<String, String, String>>()
                 }
-                // If Google doesn't know the place as a location, search for it by name instead.
                 if (l.isEmpty() && feed.contains("/headlines/section/geo/")) l = fetchNews(googleNewsSearchUrl())
                 if (l.isEmpty()) null else l
             } catch (e: Exception) {
@@ -1743,8 +1703,6 @@ class MainActivity : Activity() {
                 if (t != null && t.url.isEmpty() && !t.priv) loadStart(t.web)
             }.show()
     }
-
-    // ---- fullscreen video, long-press menu, downloads ----
 
     private fun setFullscreenMode(on: Boolean) {
         if (Build.VERSION.SDK_INT >= 30) {
@@ -1842,7 +1800,6 @@ class MainActivity : Activity() {
             req.setTitle(name)
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             if (priv) {
-                // App-scoped storage: not shown in the public Downloads folder or the gallery.
                 req.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, name)
             } else {
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
@@ -1868,8 +1825,6 @@ class MainActivity : Activity() {
             .show()
     }
 
-    // ---- downloads list ----
-
     private fun privateIdSet(): Set<String> = prefs.getStringSet("priv_dl", emptySet()) ?: emptySet()
 
     private fun showDownloads() {
@@ -1891,7 +1846,6 @@ class MainActivity : Activity() {
         scroll.addView(list)
         box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Returns true while anything is still downloading, so the list keeps refreshing.
         fun render(): Boolean {
             val items = Downloads.query(this, privateIdSet(), wantPrivate)
             list.removeAllViews()
@@ -2000,8 +1954,6 @@ class MainActivity : Activity() {
         return row
     }
 
-    // ---- pictures and videos read from the article pages themselves ----
-
     private val ogCache = HashMap<String, String>()
     private val ogVideo = HashSet<String>()
 
@@ -2012,7 +1964,6 @@ class MainActivity : Activity() {
         return if (isHttp(u)) u else ""
     }
 
-    // Reads a page's social-sharing tags, for example <meta property="og:image" content="...">.
     private fun metaContent(html: String, key: String): String? {
         val keyRe = Regex("(?:property|name)\\s*=\\s*[\"']" + Regex.escape(key) + "[\"']", RegexOption.IGNORE_CASE)
         val contentRe = Regex("content\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
@@ -2026,7 +1977,6 @@ class MainActivity : Activity() {
         return null
     }
 
-    // Returns the story's main picture and whether the page is a video story.
     private fun fetchMeta(articleUrl: String): Pair<String, Boolean> {
         val conn = URL(articleUrl).openConnection() as HttpURLConnection
         conn.connectTimeout = 4000
@@ -2054,8 +2004,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // Stories whose feed had no picture: load each article page in the background, take its picture,
-    // then redraw the news. Google News links can't be opened this way, so those stay text-only.
     private fun enrichNews(items: List<Triple<String, String, String>>, name: String) {
         val todo = items.filter {
             it.third.isEmpty() && isHttp(it.second) && hostOf(it.second) != "news.google.com" &&
@@ -2092,8 +2040,6 @@ class MainActivity : Activity() {
             }
         }.start()
     }
-
-    // ---- homepage videos (latest uploads from a news channel's YouTube feed) ----
 
     private val videoFeeds = listOf(
         Pair("BBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"),
@@ -2170,8 +2116,6 @@ class MainActivity : Activity() {
             }
             .show()
     }
-
-    // ---- news location (country from phone settings, optional state or city) ----
 
     private val newsCountries = listOf(
         Pair("India", "IN"), Pair("United States", "US"), Pair("United Kingdom", "GB"),
@@ -2254,7 +2198,6 @@ class MainActivity : Activity() {
     }
 
     private fun newsLocationChanged() {
-        // Local news comes from the Google News source, so switch to it.
         prefs.edit().putString("news", "gnews:local").apply()
         newsHtml = null
         newsItems = null
@@ -2262,8 +2205,6 @@ class MainActivity : Activity() {
         reloadStartIfShown()
         toast("News: " + newsCountryName() + (if (newsArea().isEmpty()) "" else " \u00B7 " + newsArea()))
     }
-
-    // ---- reading mode ----
 
     private fun toggleReader() {
         val t = current()
@@ -2317,10 +2258,6 @@ class MainActivity : Activity() {
             .build()
     }
 
-    // ---- how rweb introduces itself to websites ----
-
-    // Desktop mode used to change only the text of the browser name. The extra "client hint" details
-    // (platform, mobile or not) still said Android, which video sites can treat as a mismatch.
     private fun desktopMetadata(): UserAgentMetadata {
         val major = Regex("Chrome/(\\d+)").find(mobileUa)?.groupValues?.get(1) ?: "124"
         val full = major + ".0.0.0"
@@ -2347,15 +2284,12 @@ class MainActivity : Activity() {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
                 WebSettingsCompat.setUserAgentMetadata(s, if (desktop) desktopMetadata() else mobileMetadata())
             }
-            // Don't tell every website which app is making the request.
             if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
                 WebSettingsCompat.setRequestedWithHeaderOriginAllowList(s, emptySet())
             }
         } catch (e: Exception) {
         }
     }
-
-    // ---- address bar dropdown, default domain ending, voice / image / video search ----
 
     private val tldChoices = listOf(".com", ".in", ".org", ".net", ".co.in", ".io", ".ai", ".app", ".edu", ".gov")
 
@@ -2401,7 +2335,6 @@ class MainActivity : Activity() {
 
     private fun searchBaseName(): String = engines.first { it.second == searchBase() }.first
 
-    // Web, image and video search addresses for the chosen search engine.
     private fun typedSearchBases(): Triple<String, String, String> {
         val web = searchBase()
         return when {
@@ -2447,7 +2380,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // Search by picture: opens the engine's picture-search page, where you upload or take a photo.
     private fun openPhotoSearch() {
         hideSuggestions()
         val url = if (searchBase().contains("bing")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
@@ -2554,16 +2486,12 @@ class MainActivity : Activity() {
         suggestBox.visibility = View.VISIBLE
     }
 
-    // ---- 360 / VR viewer ----
-
     private fun openVrViewer() {
         newTab(null)
         val t = currentOrNull() ?: return
         t.title = "360 viewer"
         t.web.loadDataWithBaseURL("https://rweb.local/", VrViewer.HTML, "text/html", "utf-8", null)
     }
-
-    // ---- app view (hide toolbars) and home screen shortcuts ----
 
     private fun setBarsHidden(hidden: Boolean) {
         barsHidden = hidden
@@ -2587,7 +2515,6 @@ class MainActivity : Activity() {
         return Icon.createWithBitmap(bmp)
     }
 
-    // Puts the current site on the home screen. It opens in rweb with the toolbars hidden, like an app.
     private fun addToHomeScreen() {
         val t = current()
         val host = hostOf(t.url)
@@ -2612,8 +2539,6 @@ class MainActivity : Activity() {
             .build()
         sm.requestPinShortcut(info, null)
     }
-
-    // ---- ad and tracker blocking ----
 
     private fun loadAdBlockSettings() {
         adBlockOn = prefs.getBoolean("adblock", true)
@@ -2654,8 +2579,6 @@ class MainActivity : Activity() {
         toast(if (paused) "Blocking paused on " + host else "Blocking active on " + host)
     }
 
-    // ---- UI building blocks ----
-
     private val SHEET = Color.parseColor("#2A0710")
 
     private fun dlg(): AlertDialog.Builder =
@@ -2670,7 +2593,6 @@ class MainActivity : Activity() {
         return iv
     }
 
-    // A tappable cell for the bottom bar. The child is centred at sizeDp x sizeDp.
     private fun cell(child: View, sizeDp: Int, desc: String, onClick: () -> Unit): FrameLayout {
         val c = FrameLayout(this)
         c.contentDescription = desc
@@ -2824,8 +2746,6 @@ class MainActivity : Activity() {
         return row
     }
 
-    // ---- storage (history and bookmarks) ----
-
     private fun loadList(key: String): MutableList<Pair<String, String>> {
         val out = mutableListOf<Pair<String, String>>()
         try {
@@ -2880,8 +2800,6 @@ class MainActivity : Activity() {
         saveList("bookmarks", l)
         toast("Bookmarked")
     }
-
-    // ---- dialogs ----
 
     private fun showList(title: String, key: String) {
         val l = loadList(key)
