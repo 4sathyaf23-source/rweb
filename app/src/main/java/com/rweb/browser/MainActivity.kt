@@ -410,7 +410,7 @@ class MainActivity : ComponentActivity() {
         Pair("Vox Borders", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6107grRI4m0o2-emgoDnAA")
     )
 
-    private val engines = listOf(
+    private val baseEngines = listOf(
         Pair("Google", "https://www.google.com/search?q="),
         Pair("DuckDuckGo", "https://duckduckgo.com/?q="),
         Pair("Bing", "https://www.bing.com/search?q=")
@@ -1647,21 +1647,64 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    /** Search URL of the user's own rweb-search server (ends with /search?q=), or null if not configured. */
+    private fun rwebSearchBase(): String? = prefs.getString("rweb_search_url", null)?.takeIf { it.isNotBlank() }
+
+    private fun allEngines(): List<Pair<String, String>> {
+        val own = rwebSearchBase()
+        return if (own != null) baseEngines + Pair("rweb Search", own) else baseEngines
+    }
+
     private fun searchBase(): String {
         val saved = prefs.getString("search", null)
-        return if (saved != null && engines.any { it.second == saved }) saved else engines[0].second
+        return if (saved != null && allEngines().any { it.second == saved }) saved else allEngines()[0].second
     }
 
     private fun chooseEngine() {
-        val names = engines.map { it.first }.toTypedArray()
-        val idx = engines.indexOfFirst { it.second == searchBase() }.coerceAtLeast(0)
+        val list = allEngines()
+        val names = (list.map { it.first } + (if (rwebSearchBase() == null) "Add rweb Search server\u2026" else "Edit rweb Search server\u2026")).toTypedArray()
+        val idx = list.indexOfFirst { it.second == searchBase() }.coerceAtLeast(0)
         dlg()
             .setTitle("Search engine")
             .setSingleChoiceItems(names, idx) { d, i ->
-                prefs.edit().putString("search", engines[i].second).apply()
-                toast(names[i])
                 d.dismiss()
+                if (i < list.size) {
+                    prefs.edit().putString("search", list[i].second).apply()
+                    toast(names[i])
+                } else {
+                    askRwebServer()
+                }
             }.show()
+    }
+
+    private fun askRwebServer() {
+        val input = EditText(this)
+        input.setSingleLine()
+        input.hint = "https://search.example.com"
+        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        input.setText(rwebSearchBase()?.substringBefore("/search?q=") ?: "")
+        dlg()
+            .setTitle("rweb Search server")
+            .setMessage("Address of your rwebsearch server. Leave empty to remove it.")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                var v = input.text.toString().trim().trimEnd('/')
+                if (v.isEmpty()) {
+                    prefs.edit().remove("rweb_search_url").apply()
+                    toast("rweb Search removed")
+                } else {
+                    if (!isHttp(v)) v = "https://" + v
+                    if (Uri.parse(v).host == null) {
+                        toast("That address isn't valid")
+                    } else {
+                        val url = v + "/search?q="
+                        prefs.edit().putString("rweb_search_url", url).putString("search", url).apply()
+                        toast("rweb Search selected")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun esc(s: String): String =
@@ -2727,13 +2770,13 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    private fun searchBaseName(): String = engines.first { it.second == searchBase() }.first
+    private fun searchBaseName(): String = allEngines().first { it.second == searchBase() }.first
 
     private fun typedSearchBases(): Triple<String, String, String> {
         val web = searchBase()
         return when {
-            web.contains("duckduckgo") -> Triple(web, "https://duckduckgo.com/?iax=images&ia=images&q=", "https://duckduckgo.com/?iax=videos&ia=videos&q=")
-            web.contains("bing") -> Triple(web, "https://www.bing.com/images/search?q=", "https://www.bing.com/videos/search?q=")
+            web.startsWith("https://duckduckgo.com") -> Triple(web, "https://duckduckgo.com/?iax=images&ia=images&q=", "https://duckduckgo.com/?iax=videos&ia=videos&q=")
+            web.startsWith("https://www.bing.com") -> Triple(web, "https://www.bing.com/images/search?q=", "https://www.bing.com/videos/search?q=")
             else -> Triple(web, "https://www.google.com/search?tbm=isch&q=", "https://www.google.com/search?tbm=vid&q=")
         }
     }
@@ -2778,7 +2821,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openPhotoSearch() {
         hideSuggestions()
-        val url = if (searchBase().contains("bing")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
+        val url = if (searchBase().startsWith("https://www.bing.com")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
         currentOrNull()?.web?.loadUrl(url)
         toast("Choose or take a photo on the page")
     }
@@ -3377,7 +3420,7 @@ class MainActivity : ComponentActivity() {
             MenuRow("Reading mode", if (t.readerUrl != null) "On" else "Off", false) { toggleReader() },
             MenuRow("360 / VR video viewer", null, false) { openVrViewer() },
             MenuRow("Find in page", null, false) { findInPage() },
-            MenuRow("Search engine", engines.first { it.second == searchBase() }.first, false) { chooseEngine() },
+            MenuRow("Search engine", allEngines().first { it.second == searchBase() }.first, false) { chooseEngine() },
             MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
             MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
