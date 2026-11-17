@@ -162,6 +162,11 @@ class MainActivity : ComponentActivity() {
     // exposing a JavaScript bridge to every website
     private val linkTitles = ConcurrentHashMap<String, String>()
 
+    // on-device search engine (index + crawler), see LocalSearch.kt
+    private lateinit var localSearch: LocalSearch
+    private val crawler: LocalCrawler by lazy { LocalCrawler(localSearch) }
+    @Volatile private var crawlStatus = ""
+
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshIntervalMs = 15 * 60 * 1000L // 15 minutes
 
@@ -422,7 +427,7 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}.lf{margin-top:14px}.lf input{border:2px solid var(--acc);box-shadow:none}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
 
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
@@ -430,6 +435,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
+        localSearch = LocalSearch(this)
         loadAdBlockSettings()
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
@@ -1301,6 +1307,7 @@ class MainActivity : ComponentActivity() {
                         addHistory(tab.title, tab.url)
                         tab.lastHistoryUrl = tab.url
                     }
+                    if (!tab.priv && indexVisited() && tab.url.startsWith("http")) indexCurrentPage(view, tab.url)
                 } else {
                     tab.title = "New tab"
                     if (!tab.priv) vidHtml?.let { injectVideos(tab.web, it) }
@@ -1358,6 +1365,7 @@ class MainActivity : ComponentActivity() {
                 // a tap on a story/video card on the start page: remember it (marks as read, trains interests)
                 if (!tab.priv && tab.url.isEmpty() && req.isForMainFrame && req.hasGesture()) {
                     linkTitles[urlStr]?.let { recordClick(urlStr, it) }
+                    if (isHttp(urlStr)) localSearch.visit(urlStr)
                 }
 
                 if (urlStr.contains("web.whatsapp.com")) {
@@ -1371,6 +1379,9 @@ class MainActivity : ComponentActivity() {
                     when (u.host) {
                         "voice" -> launchVoice()
                         "photo" -> openPhotoSearch()
+                        "search" -> runLocalSearch(tab, u.getQueryParameter("q") ?: "")
+                        "home" -> loadStart(tab.web)
+                        "crawl" -> showSearchIndexMenu()
                     }
                     return true
                 }
@@ -1734,7 +1745,7 @@ class MainActivity : ComponentActivity() {
         val icons = siteIcons()
         val sb = StringBuilder()
         sb.append(HEAD_A.replaceFirst("<html>", if (isDark()) "<html class=\"dark\">" else "<html>"))
-        sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B)
+        sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B.replace("<div class=\"grid\">", localBoxHtml() + "<div class=\"grid\">"))
         for (t in tiles) {
             val letter = t.first.trim().take(1).uppercase()
             sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
@@ -2788,6 +2799,7 @@ class MainActivity : ComponentActivity() {
             "};var cur='web';function pick(k){cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
             "document.getElementById('q').placeholder=(k==='web')?'Search the web':(k==='img'?'Search images':'Search videos');}" +
             "function go(){var v=document.getElementById('q').value.trim();if(!v){return false;}location.href=B[cur]+encodeURIComponent(v);return false;}" +
+            "function lgo(){var v=document.getElementById('lq');if(!v){return false;}v=v.value.trim();if(!v){return false;}location.href='rweb://search?q='+encodeURIComponent(v);return false;}" +
             "function filterCategory(c){document.querySelectorAll('.nw,.vc').forEach(function(e){e.style.display=(c==='All'||e.getAttribute('data-cat')===c)?'':'none';});}</script>"
     }
 
@@ -3086,6 +3098,221 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ================= on-device search: homepage box, results page, crawling, indexing =================
+
+    private fun indexVisited(): Boolean = prefs.getBoolean("index_visited", true)
+    private fun wifiOnly(): Boolean = prefs.getBoolean("crawl_wifi", true)
+
+    private val defaultCrawlSeeds = listOf(
+        "https://en.wikipedia.org/wiki/Main_Page",
+        "https://developer.mozilla.org/en-US/",
+        "https://www.bbc.com/news",
+        "https://www.theguardian.com/international",
+        "https://www.nature.com/",
+        "https://www.nasa.gov/"
+    )
+
+    private fun crawlSeeds(): List<String> {
+        val saved = prefs.getString("crawl_seeds", null) ?: return defaultCrawlSeeds
+        return saved.lines().map { it.trim() }.filter { isHttp(it) }
+    }
+
+    private fun localBoxHtml(): String {
+        val n = localSearch.count()
+        val hint = if (n == 0) "Search my rweb index (empty: open menu > Search index)" else "Search my rweb index \u00B7 " + n + " pages"
+        return "<form class=\"lf\" onsubmit=\"return lgo()\"><input id=\"lq\" placeholder=\"" + esc(hint) + "\" autocomplete=\"off\"></form>"
+    }
+
+    private val localCss = """
+        :root{--bg:#fff;--fg:#202124;--mute:#5f6368;--card:#f8f9fa;--fld:#f1f3f4;--acc:#c41e3a;--link:#1a0dab}
+        html.dark{--bg:#3a0a14;--fg:#fff1f3;--mute:#e3a9b1;--card:#7a1022;--fld:#7a1022;--acc:#ff6b7d;--link:#ffb3be}
+        *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:sans-serif;line-height:1.45}
+        a{color:var(--link);text-decoration:none}
+        header{display:flex;gap:12px;align-items:center;padding:12px 14px;position:sticky;top:0;background:var(--bg)}
+        .lg{color:var(--acc);font-weight:700;font-size:22px}header form{flex:1;margin:0}
+        input{width:100%;padding:12px 18px;border-radius:26px;border:2px solid var(--acc);background:var(--fld);color:var(--fg);font-size:16px;outline:none}
+        main{padding:4px 16px 40px;max-width:720px;margin:0 auto}.info{color:var(--mute);font-size:13px;margin:6px 0 14px}
+        .r{margin:0 0 20px}.u{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .t{font-size:18px;display:block;margin:2px 0}.s{font-size:14px;word-wrap:break-word}mark{background:none;color:var(--acc);font-weight:600}
+        .web{margin:22px 0 8px}.web a{display:block;padding:12px 16px;border-radius:18px;background:var(--fld);margin-bottom:8px;color:var(--fg)}
+        .none{margin-top:36px;text-align:center;color:var(--mute)}.none a{display:inline-block;margin-top:14px;padding:10px 20px;border-radius:20px;background:var(--acc);color:#fff}
+    """
+
+    private fun localResultsHtml(q: String, res: LocalSearch.Result?, indexSize: Int): String {
+        val sb = StringBuilder()
+        sb.append("<!doctype html><html").append(if (isDark()) " class=\"dark\"" else "").append("><head><meta charset=\"utf-8\">")
+        sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>").append(localCss).append("</style></head><body>")
+        sb.append("<header><a class=\"lg\" href=\"rweb://home\">rweb</a>")
+        sb.append("<form onsubmit=\"var v=this.q.value.trim();if(v){location.href='rweb://search?q='+encodeURIComponent(v);}return false\">")
+        sb.append("<input name=\"q\" value=\"").append(esc(q)).append("\" autocomplete=\"off\"></form></header><main>")
+        if (indexSize == 0) {
+            sb.append("<div class=\"none\">Your index is empty.<br>Crawl your favourite sites or just browse: pages you visit are added.<br>")
+            sb.append("<a href=\"rweb://crawl\">Build my index</a></div>")
+        } else if (res == null || res.hits.isEmpty()) {
+            sb.append("<div class=\"none\">Nothing in your index for <b>").append(esc(q)).append("</b> (").append(indexSize).append(" pages).</div>")
+        } else {
+            sb.append("<div class=\"info\">").append(res.total).append(" results \u00B7 ").append(res.ms).append(" ms \u00B7 searched ").append(indexSize).append(" pages</div>")
+            for (h in res.hits) {
+                val snip = esc(h.snippet).replace(LocalSearch.HL_OPEN, "<mark>").replace(LocalSearch.HL_CLOSE, "</mark>")
+                sb.append("<div class=\"r\"><div class=\"u\">").append(esc(h.url)).append("</div>")
+                sb.append("<a class=\"t\" href=\"").append(esc(h.url)).append("\">").append(esc(h.title)).append("</a>")
+                sb.append("<div class=\"s\">").append(snip).append("</div></div>")
+            }
+        }
+        val bases = typedSearchBases()
+        sb.append("<div class=\"web\"><a href=\"").append(esc(searchBase() + Uri.encode(q))).append("\">Search the web for \u201C").append(esc(q)).append("\u201D</a>")
+        sb.append("<a href=\"").append(esc(bases.second + Uri.encode(q))).append("\">Images</a></div></main></body></html>")
+        return sb.toString()
+    }
+
+    /** Runs the query against the on-device index and shows the results in this tab. */
+    private fun runLocalSearch(tab: Tab, query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        Thread {
+            val size = localSearch.count()
+            val res = try {
+                localSearch.search(q)
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed || tabs.indexOf(tab) < 0) return@runOnUiThread
+                tab.web.loadDataWithBaseURL("https://rweb.local/", localResultsHtml(q, res, size), "text/html", "utf-8", null)
+            }
+        }.start()
+    }
+
+    // ---- indexing the pages you visit (normal tabs only) ----
+
+    private val noIndexHosts = setOf(
+        "mail.google.com", "web.whatsapp.com", "accounts.google.com", "outlook.live.com", "outlook.office.com",
+        "drive.google.com", "docs.google.com", "calendar.google.com"
+    )
+    private val noIndexUrl = Regex("(login|log-in|signin|sign-in|signup|sign-up|auth|account|checkout|payment|password|banking)", RegexOption.IGNORE_CASE)
+
+    private val indexJs = """
+        (function(){try{
+          if(document.querySelector('input[type=password]'))return '';
+          var r=document.querySelector('meta[name=robots]');if(r&&/noindex/i.test(r.content))return '';
+          var d=document.querySelector('meta[name=description]');
+          return JSON.stringify({t:document.title||'',d:(d&&d.content)||'',x:((document.body&&document.body.innerText)||'').substring(0,30000)});
+        }catch(e){return ''}})()
+    """
+
+    private fun indexCurrentPage(view: WebView?, url: String) {
+        val web = view ?: return
+        val host = hostOf(url) ?: return
+        if (noIndexHosts.any { host == it || host.endsWith(".$it") } || noIndexUrl.containsMatchIn(url)) return
+        web.evaluateJavascript(indexJs) { raw ->
+            val text = try {
+                JSONTokener(raw ?: "null").nextValue() as? String
+            } catch (e: Exception) {
+                null
+            }
+            if (!text.isNullOrEmpty()) {
+                try {
+                    val o = JSONObject(text)
+                    localSearch.index(url, o.optString("t"), o.optString("d") + " " + o.optString("x"))
+                } catch (e: Exception) {
+                }
+            }
+        }
+    }
+
+    // ---- crawling ----
+
+    private fun isMetered(): Boolean = try {
+        (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
+    } catch (e: Exception) {
+        false // no permission or no service: do not block
+    }
+
+    private fun startCrawl() {
+        if (crawler.running) {
+            toast("Already crawling")
+            return
+        }
+        if (wifiOnly() && isMetered()) {
+            toast("Connect to Wi-Fi, or turn off \"Crawl on Wi-Fi only\"")
+            return
+        }
+        val seeds = (crawlSeeds() + loadList("bookmarks").map { it.second }).distinct()
+        if (seeds.isEmpty()) {
+            toast("Add some crawl sites first")
+            return
+        }
+        crawlStatus = "starting"
+        toast("Crawling in the background. Keep rweb open.")
+        Thread {
+            val n = try {
+                crawler.crawl(seeds, 150, 2, 60, 1000L) { count -> crawlStatus = count.toString() + " pages" }
+            } catch (e: Exception) {
+                0
+            }
+            runOnUiThread {
+                crawlStatus = ""
+                if (!isFinishing && !isDestroyed) toast("Indexed " + n + " new pages")
+            }
+        }.start()
+    }
+
+    private fun askCrawlSites() {
+        val input = EditText(this)
+        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_VARIATION_URI
+        input.minLines = 6
+        input.gravity = Gravity.TOP
+        input.setText(crawlSeeds().joinToString("\n"))
+        dlg()
+            .setTitle("Sites to crawl")
+            .setMessage("One address per line. Your bookmarks are crawled too.")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val lines = input.text.toString().lines().map { it.trim() }.filter { isHttp(it) }
+                prefs.edit().putString("crawl_seeds", lines.joinToString("\n")).apply()
+                toast(lines.size.toString() + " sites saved")
+            }
+            .setNeutralButton("Reset") { _, _ -> prefs.edit().remove("crawl_seeds").apply() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showSearchIndexMenu() {
+        val n = localSearch.count()
+        val running = crawler.running
+        val labels = arrayOf(
+            if (running) "Stop crawling (" + crawlStatus + ")" else "Crawl now",
+            "Edit sites to crawl",
+            "Index pages I visit: " + (if (indexVisited()) "On" else "Off"),
+            "Crawl on Wi-Fi only: " + (if (wifiOnly()) "On" else "Off"),
+            "Clear search index (" + n + " pages)"
+        )
+        dlg()
+            .setTitle("Search index \u00B7 " + n + " pages")
+            .setItems(labels) { _, i ->
+                when (i) {
+                    0 -> if (running) {
+                        crawler.stopRequested = true
+                        toast("Stopping\u2026")
+                    } else {
+                        startCrawl()
+                    }
+                    1 -> askCrawlSites()
+                    2 -> {
+                        prefs.edit().putBoolean("index_visited", !indexVisited()).apply()
+                        toast(if (indexVisited()) "Visited pages will be indexed" else "Visited pages are no longer indexed")
+                    }
+                    3 -> prefs.edit().putBoolean("crawl_wifi", !wifiOnly()).apply()
+                    4 -> confirm("Clear search index?", "This deletes everything rweb has indexed. Your history and bookmarks stay.") {
+                        localSearch.clear()
+                        toast("Search index cleared")
+                    }
+                }
+            }
+            .setNegativeButton("Close", null)
             .show()
     }
 
@@ -3421,6 +3648,7 @@ class MainActivity : ComponentActivity() {
             MenuRow("360 / VR video viewer", null, false) { openVrViewer() },
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", allEngines().first { it.second == searchBase() }.first, false) { chooseEngine() },
+            MenuRow("Search index", localSearch.count().toString() + " pages", false) { showSearchIndexMenu() },
             MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
             MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
@@ -3523,6 +3751,7 @@ class MainActivity : ComponentActivity() {
         WebStorage.getInstance().deleteAllData()
         GeolocationPermissions.getInstance().clearAll()
         saveList("history", emptyList())
+        localSearch.clear()
         toast("Browsing data cleared")
     }
 }
