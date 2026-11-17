@@ -61,6 +61,35 @@ class LocalSearch(context: Context) : SQLiteOpenHelper(context.applicationContex
             TOKEN.findAll(text.lowercase(Locale.ROOT)).map { it.value }
                 .filter { it.length in 2..40 && it !in STOP }.map { stem(it) }.toList()
 
+        private val SECOND_LEVEL = setOf("co", "com", "org", "net", "gov", "ac", "edu")
+
+        private fun norm(s: String): String = s.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
+
+        /**
+         * The page the user almost certainly means ("bbc news", "wikipedia", "mdn"), or null.
+         * A hit counts when the query equals its site name, or its title (for top-level pages).
+         */
+        fun directMatch(query: String, hits: List<Hit>): Hit? {
+            val qn = norm(query.trim().removePrefix("www."))
+            if (qn.length < 3) return null
+            for (h in hits.take(5)) {
+                val rest = h.url.substringAfter("://")
+                val host = rest.substringBefore('/').substringBefore(':').lowercase(Locale.ROOT).removePrefix("www.")
+                val parts = host.split('.')
+                val label = when {
+                    parts.size >= 3 && parts[parts.size - 2] in SECOND_LEVEL -> parts[parts.size - 3]
+                    parts.size >= 2 -> parts[parts.size - 2]
+                    else -> parts[0]
+                }
+                val path = rest.substringAfter('/', "").substringBefore('?').trim('/')
+                val shallow = path.indexOf('/') < 0 && path.length <= 30 // the site's front page or a top-level section
+                val titleN = norm(h.title)
+                if (titleN == qn) return h
+                if (shallow && (norm(label) == qn || (qn.length >= 4 && titleN.contains(qn) && titleN.length <= qn.length + 12))) return h
+            }
+            return null
+        }
+
         private fun sha1(s: String): String =
             MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
     }
@@ -382,7 +411,8 @@ object HtmlText {
 
     private val META = Regex("<meta\\b[^>]*>", RegexOption.IGNORE_CASE)
     private val ANCHOR = Regex("<a\\b[^>]*>", RegexOption.IGNORE_CASE)
-    private val ATTR = Regex("([a-zA-Z:-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
+    private val ATTR = Regex("([a-zA-Z:-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'>]+))")
+    private val BASE = Regex("<base\\b[^>]*>", RegexOption.IGNORE_CASE)
     private val TITLE = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     private val DROP = Regex(
         "<(script|style|noscript|template|svg|nav|footer|aside|form|iframe|head)\\b[^>]*>.*?</\\1\\s*>",
@@ -395,7 +425,7 @@ object HtmlText {
 
     private fun attrs(tag: String): Map<String, String> {
         val m = HashMap<String, String>()
-        for (a in ATTR.findAll(tag)) m[a.groupValues[1].lowercase(Locale.ROOT)] = a.groupValues[2].ifEmpty { a.groupValues[3] }
+        for (a in ATTR.findAll(tag)) m[a.groupValues[1].lowercase(Locale.ROOT)] = a.groupValues[2].ifEmpty { a.groupValues[3].ifEmpty { a.groupValues[4] } }
         return m
     }
 
@@ -428,14 +458,18 @@ object HtmlText {
         }
         val title = decode(TITLE.find(html)?.groupValues?.get(1) ?: "").replace(WS, " ").trim().take(300)
 
+        var base = baseUrl
+        BASE.find(html)?.let { bm ->
+            attrs(bm.value)["href"]?.let { h -> LocalCrawler.canon(decode(h), baseUrl)?.let { base = it } }
+        }
         val links = ArrayList<String>()
         for (am in ANCHOR.findAll(html)) {
             val a = attrs(am.value)
             val href = a["href"] ?: continue
             if (href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("tel:")) continue
             if ((a["rel"] ?: "").lowercase(Locale.ROOT).contains("nofollow")) continue
-            LocalCrawler.canon(decode(href), baseUrl)?.let { if (it !in links) links.add(it) }
-            if (links.size >= 100) break
+            LocalCrawler.canon(decode(href), base)?.let { if (it !in links) links.add(it) }
+            if (links.size >= 300) break
         }
 
         var text = textOf(html, DROP)
@@ -485,7 +519,7 @@ class LocalCrawler(private val ls: LocalSearch) {
         }
     }
 
-    private class Rules(val allow: List<String>, val disallow: List<String>) {
+    private class Rules(val allow: List<String>, val disallow: List<String>, val sitemaps: List<String> = emptyList()) {
         fun allowed(path: String): Boolean {
             val a = allow.filter { path.startsWith(it.removeSuffix("*")) }.maxOfOrNull { it.length } ?: -1
             val d = disallow.filter { path.startsWith(it.removeSuffix("*")) }.maxOfOrNull { it.length } ?: -1
@@ -541,6 +575,7 @@ class LocalCrawler(private val ls: LocalSearch) {
     }
 
     private fun parseRobots(text: String): Rules {
+        val maps = ArrayList<String>() // Sitemap: lines
         val sa = ArrayList<String>(); val sd = ArrayList<String>() // rules for rweb-bot
         val wa = ArrayList<String>(); val wd = ArrayList<String>() // rules for *
         var agents = ArrayList<String>()
@@ -551,6 +586,10 @@ class LocalCrawler(private val ls: LocalSearch) {
             if (idx < 0) continue
             val key = line.substring(0, idx).trim().lowercase(Locale.ROOT)
             val value = line.substring(idx + 1).trim()
+            if (key == "sitemap") {
+                if (value.startsWith("http")) maps.add(value)
+                continue
+            }
             if (key == "user-agent") {
                 if (!lastWasAgent) agents = ArrayList()
                 agents.add(value.lowercase(Locale.ROOT))
@@ -569,7 +608,59 @@ class LocalCrawler(private val ls: LocalSearch) {
                 if (star) wd.add(value)
             }
         }
-        return if (sa.isNotEmpty() || sd.isNotEmpty()) Rules(sa, sd) else Rules(wa, wd)
+        return if (sa.isNotEmpty() || sd.isNotEmpty()) Rules(sa, sd, maps) else Rules(wa, wd, maps)
+    }
+
+    private val LOC = Regex("<loc>\\s*(.*?)\\s*</loc>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+
+    private fun fetchText(url: String, maxBytes: Int): String? {
+        val c = get(url, 6000)
+        try {
+            if (c.responseCode !in 200..299) return null
+            val buf = ByteArrayOutputStream()
+            val tmp = ByteArray(8192)
+            var total = 0
+            c.inputStream.use { s ->
+                while (total < maxBytes) {
+                    val r = s.read(tmp)
+                    if (r <= 0) break
+                    buf.write(tmp, 0, r)
+                    total += r
+                }
+            }
+            return buf.toByteArray().toString(Charsets.UTF_8)
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    /** Page URLs a site lists in its sitemap (robots.txt "Sitemap:" or /sitemap.xml): finds pages no link points to. */
+    private fun sitemapUrls(host: String, rules: Rules, limit: Int): List<String> {
+        val roots = ArrayList<String>(rules.sitemaps.filter { hostOf(it) == host }.take(3))
+        if (roots.isEmpty()) roots.add("https://$host/sitemap.xml")
+        val out = ArrayList<String>()
+        val done = HashSet<String>()
+        val todo = ArrayDeque<Pair<String, Int>>()
+        for (r in roots) todo.add(Pair(r, 0))
+        while (todo.isNotEmpty() && out.size < limit && !stopRequested) {
+            val item = todo.poll() ?: break
+            if (!done.add(item.first) || item.first.endsWith(".gz")) continue
+            val xml = try {
+                fetchText(item.first, 2_000_000)
+            } catch (e: Exception) {
+                null
+            } ?: continue
+            val locs = LOC.findAll(xml).map { HtmlText.decode(it.groupValues[1]) }.toList()
+            if (xml.contains("<sitemapindex", ignoreCase = true)) {
+                if (item.second < 1) for (l in locs.take(5)) if (hostOf(l) == host) todo.add(Pair(l, item.second + 1))
+            } else {
+                for (l in locs) {
+                    canon(l, null)?.let { if (hostOf(it) == host) out.add(it) }
+                    if (out.size >= limit) break
+                }
+            }
+        }
+        return out
     }
 
     /** (final URL, html) or null when the page is not usable HTML. */
@@ -615,6 +706,7 @@ class LocalCrawler(private val ls: LocalSearch) {
             val perHost = HashMap<String, Int>()
             val nextOk = HashMap<String, Long>()
             val robots = HashMap<String, Rules>()
+            val sitemapDone = HashSet<String>()
             var fetched = 0
 
             while (queue.isNotEmpty() && fetched < maxPages && !stopRequested) {
@@ -642,6 +734,9 @@ class LocalCrawler(private val ls: LocalSearch) {
                 try {
                     if (!publicHost(host)) continue
                     val rules = robots.getOrPut(host) { loadRobots(host) }
+                    if (depth == 0 && sitemapDone.add(host)) { // start pages: also queue what the site's sitemap lists
+                        for (u in sitemapUrls(host, rules, 100)) if (seen.add(u)) queue.add(Pair(u, 1))
+                    }
                     if (!rules.allowed(pathOf(url))) continue
                     if (ls.hasRecent(url, 7L * 24 * 3600 * 1000)) continue // indexed this week already
                     val got = fetchPage(url) ?: continue
