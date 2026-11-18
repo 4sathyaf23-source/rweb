@@ -14,7 +14,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
@@ -143,6 +146,86 @@ class MainActivity : Activity() {
     private fun dp(v: Int): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
+    // Programmatic icon generator to avoid missing XML drawables
+    private fun createIcon(type: String): Drawable {
+        val size = dp(48)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply {
+            isAntialias = true
+            color = Color.WHITE
+            strokeWidth = dp(3).toFloat()
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+
+        val c = size / 2f
+        when (type) {
+            "search" -> {
+                canvas.drawCircle(c - dp(3), c - dp(3), dp(7).toFloat(), paint)
+                canvas.drawLine(c + dp(2), c + dp(2), c + dp(10), c + dp(10), paint)
+            }
+            "lock" -> {
+                paint.style = Paint.Style.FILL
+                canvas.drawRect(c - dp(7), c - dp(2), c + dp(7), c + dp(10), paint)
+                paint.style = Paint.Style.STROKE
+                canvas.drawArc(c - dp(5), c - dp(10), c + dp(5), c + dp(0), 180f, 180f, false, paint)
+            }
+            "reload" -> {
+                paint.style = Paint.Style.STROKE
+                canvas.drawArc(c - dp(8), c - dp(8), c + dp(8), c + dp(8), 45f, 270f, false, paint)
+                // Arrowhead
+                paint.style = Paint.Style.FILL
+                val path = Path().apply {
+                    moveTo(c + dp(8), c - dp(6))
+                    lineTo(c + dp(13), c - dp(2))
+                    lineTo(c + dp(6), c + dp(1))
+                    close()
+                }
+                canvas.drawPath(path, paint)
+            }
+            "back" -> {
+                val path = Path().apply {
+                    moveTo(c + dp(4), c - dp(10))
+                    lineTo(c - dp(6), c)
+                    lineTo(c + dp(4), c + dp(10))
+                }
+                canvas.drawPath(path, paint)
+            }
+            "fwd" -> {
+                val path = Path().apply {
+                    moveTo(c - dp(4), c - dp(10))
+                    lineTo(c + dp(6), c)
+                    lineTo(c - dp(4), c + dp(10))
+                }
+                canvas.drawPath(path, paint)
+            }
+            "home" -> {
+                val path = Path().apply {
+                    moveTo(c, c - dp(10))
+                    lineTo(c - dp(11), c - dp(1))
+                    lineTo(c - dp(7), c - dp(1))
+                    lineTo(c - dp(7), c + dp(9))
+                    lineTo(c + dp(7), c + dp(9))
+                    lineTo(c + dp(7), c - dp(1))
+                    lineTo(c + dp(11), c - dp(1))
+                    close()
+                }
+                paint.style = Paint.Style.FILL
+                canvas.drawPath(path, paint)
+            }
+            "menu" -> {
+                paint.style = Paint.Style.FILL
+                val y = c - dp(8)
+                canvas.drawCircle(c, y, dp(2.5f).toFloat(), paint)
+                canvas.drawCircle(c, y + dp(8), dp(2.5f).toFloat(), paint)
+                canvas.drawCircle(c, y + dp(16), dp(2.5f).toFloat(), paint)
+            }
+        }
+        return BitmapDrawable(resources, bitmap)
+    }
+
     private fun buildUi() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -164,10 +247,10 @@ class MainActivity : Activity() {
         }
 
         lockIcon = ImageView(this).apply {
-            setImageResource(R.drawable.ic_search_w)
+            setImageDrawable(createIcon("search"))
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
-        urlBox.addView(lockIcon, LinearLayout.LayoutParams(dp(16), dp(16)).apply {
+        urlBox.addView(lockIcon, LinearLayout.LayoutParams(dp(18), dp(18)).apply {
             marginEnd = dp(8)
         })
 
@@ -208,7 +291,7 @@ class MainActivity : Activity() {
         urlBox.addView(urlInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         reloadBtn = ImageView(this).apply {
-            setImageResource(R.drawable.ic_reload_w)
+            setImageDrawable(createIcon("reload"))
             scaleType = ImageView.ScaleType.FIT_CENTER
             setPadding(dp(6), dp(4), dp(4), dp(4))
             setOnClickListener {
@@ -221,7 +304,7 @@ class MainActivity : Activity() {
                 }
             }
         }
-        urlBox.addView(reloadBtn, LinearLayout.LayoutParams(dp(26), dp(26)))
+        urlBox.addView(reloadBtn, LinearLayout.LayoutParams(dp(28), dp(28)))
 
         topBar.addView(urlBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(topBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -250,15 +333,15 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(6), dp(8), dp(6))
         }
 
-        backBtn = navIcon(R.drawable.ic_back_w) {
+        backBtn = navIcon(createIcon("back")) {
             val t = currentTab() ?: return@navIcon
             if (t.web.canGoBack()) t.web.goBack()
         }
-        fwdBtn = navIcon(R.drawable.ic_fwd_w) {
+        fwdBtn = navIcon(createIcon("fwd")) {
             val t = currentTab() ?: return@navIcon
             if (t.web.canGoForward()) t.web.goForward()
         }
-        homeBtn = navIcon(R.drawable.ic_home_w) {
+        homeBtn = navIcon(createIcon("home")) {
             val t = currentTab() ?: return@navIcon
             resetDesktopIfForced(t)
             t.url = HOME
@@ -280,7 +363,7 @@ class MainActivity : Activity() {
         }
         tabWrap.addView(tabBtn, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
 
-        menuBtn = navIcon(R.drawable.ic_menu_w) { showMenuDialog() }
+        menuBtn = navIcon(createIcon("menu")) { showMenuDialog() }
 
         pill.addView(backBtn, LinearLayout.LayoutParams(0, dp(36), 1f))
         pill.addView(fwdBtn, LinearLayout.LayoutParams(0, dp(36), 1f))
@@ -292,9 +375,9 @@ class MainActivity : Activity() {
         root.addView(navWrap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun navIcon(res: Int, onClick: () -> Unit): ImageView =
+    private fun navIcon(drawable: Drawable, onClick: () -> Unit): ImageView =
         ImageView(this).apply {
-            setImageResource(res)
+            setImageDrawable(drawable)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(8), dp(8), dp(8), dp(8))
             setOnClickListener { onClick() }
@@ -634,7 +717,6 @@ class MainActivity : Activity() {
             else -> searchBase() + URLEncoder.encode(q, "UTF-8")
         }
 
-        // Restore normal user-agent if navigating away from forced-desktop image search
         if (!target.contains("google.com/imghp") && !target.contains("lens.google.com")) {
             resetDesktopIfForced(t)
         }
@@ -663,10 +745,10 @@ class MainActivity : Activity() {
     private fun syncUrlBar(t: Tab) {
         if (urlInput.hasFocus()) return
         if (t.url == HOME) {
-            lockIcon.setImageResource(R.drawable.ic_search_w)
+            lockIcon.setImageDrawable(createIcon("search"))
             urlInput.setText("")
         } else {
-            lockIcon.setImageResource(if (t.url.startsWith("https://")) R.drawable.ic_lock_w else R.drawable.ic_search_w)
+            lockIcon.setImageDrawable(createIcon(if (t.url.startsWith("https://")) "lock" else "search"))
             urlInput.setText(t.url)
         }
     }
@@ -1032,7 +1114,6 @@ class MainActivity : Activity() {
     }
 
     private fun addHistory(title: String, url: String) {
-        // Skip saving giant internal Google Lens / session query URLs
         if (url.contains("vsrid=") || url.contains("gsessionid=") || url.contains("vsint=")) return
 
         val l = loadList("history")
