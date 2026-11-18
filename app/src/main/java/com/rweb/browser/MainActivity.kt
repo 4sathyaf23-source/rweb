@@ -164,11 +164,6 @@ class MainActivity : ComponentActivity() {
     // exposing a JavaScript bridge to every website
     private val linkTitles = ConcurrentHashMap<String, String>()
 
-    // on-device search engine (index + crawler), see LocalSearch.kt
-    private lateinit var localSearch: LocalSearch
-    private val crawler: LocalCrawler by lazy { LocalCrawler(localSearch) }
-    @Volatile private var crawlStatus = ""
-
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshIntervalMs = 15 * 60 * 1000L // 15 minutes
 
@@ -182,7 +177,6 @@ class MainActivity : ComponentActivity() {
 
     private val io = Executors.newSingleThreadExecutor()
 
-    /** Runs [task] on the IO thread; ignored if the executor is already shut down (activity closing). */
     private fun runIo(task: () -> Unit) {
         try {
             io.execute {
@@ -420,8 +414,7 @@ class MainActivity : ComponentActivity() {
     private val baseEngines = listOf(
         Pair("Google", "https://www.google.com/search?q="),
         Pair("DuckDuckGo", "https://duckduckgo.com/?q="),
-        Pair("Bing", "https://www.bing.com/search?q="),
-        Pair("rweb Search", "rweb://search?q=")
+        Pair("Bing", "https://www.bing.com/search?q=")
     )
 
     companion object {
@@ -438,7 +431,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
-        localSearch = LocalSearch(this)
         loadAdBlockSettings()
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
@@ -449,7 +441,6 @@ class MainActivity : ComponentActivity() {
         wipePrivate()
         cleanPrivateDownloads()
 
-        // Load cached feeds for instant offline start
         vidHtml = loadFeedCache("vids_cache.json")
         newsHtml = loadFeedCache("news_cache.json")
 
@@ -922,10 +913,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun navigate(tab: Tab, target: String) {
-        if (target.startsWith("rweb://search")) { // our own engine: results are built in the app
-            runLocalSearch(tab, Uri.parse(target).getQueryParameter("q") ?: "")
-            return
-        }
         val up = upgradeHttps(target)
         tab.httpFallback = if (up != target) target else null
         tab.web.loadUrl(up)
@@ -1106,7 +1093,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- Local Caching Helpers ---
     private fun saveFeedCache(filename: String, content: String) {
         runIo { File(filesDir, filename).writeText(content) }
     }
@@ -1120,11 +1106,10 @@ class MainActivity : ComponentActivity() {
         return null
     }
 
-    // --- Read state, click counts and interests (bounded, kept in memory, one prefs write per tap) ---
     private val statsLock = Any()
-    private var readList: ArrayList<String>? = null              // oldest first, max 500
-    private var clickMap: LinkedHashMap<String, Int>? = null     // oldest first, max 300
-    private var interests: HashMap<String, Int>? = null          // max 400 words
+    private var readList: ArrayList<String>? = null
+    private var clickMap: LinkedHashMap<String, Int>? = null
+    private var interests: HashMap<String, Int>? = null
 
     private val wordRe = Regex("[a-z0-9]+")
     private val stopWords = setOf("news", "video", "watch", "with", "from", "this", "that", "your", "what", "have", "will", "about", "after")
@@ -1213,7 +1198,6 @@ class MainActivity : ComponentActivity() {
         linkTitles[url] = title
     }
 
-    // --- Custom Feeds Management ---
     private fun getCustomFeeds(key: String): MutableList<Pair<String, String>> {
         val list = mutableListOf<Pair<String, String>>()
         try {
@@ -1238,7 +1222,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- Categories (whole-word matching) ---
     private val techWords = setOf("tech", "technology", "ai", "software", "app", "apps", "phone", "iphone", "android", "apple", "google", "microsoft", "openai", "chip", "chips", "cyber", "robot", "robots", "internet", "gadget", "startup", "startups")
     private val sportsWords = setOf("sport", "sports", "football", "cricket", "match", "league", "nba", "nfl", "soccer", "tennis", "olympic", "olympics", "tournament", "goal", "coach", "ipl", "fifa", "championship")
     private val businessWords = setOf("business", "market", "markets", "economy", "economic", "stock", "stocks", "bank", "banks", "inflation", "trade", "tariff", "tariffs", "earnings", "shares", "investors", "finance")
@@ -1315,7 +1298,6 @@ class MainActivity : ComponentActivity() {
                         addHistory(tab.title, tab.url)
                         tab.lastHistoryUrl = tab.url
                     }
-                    if (!tab.priv && indexVisited() && tab.url.startsWith("http")) indexCurrentPage(view, tab.url)
                 } else {
                     tab.title = "New tab"
                     if (!tab.priv) vidHtml?.let { injectVideos(tab.web, it) }
@@ -1371,10 +1353,8 @@ class MainActivity : ComponentActivity() {
                 val u = req.url
                 val urlStr = u.toString()
 
-                // a tap on a story/video card on the start page: remember it (marks as read, trains interests)
                 if (!tab.priv && tab.url.isEmpty() && req.isForMainFrame && req.hasGesture()) {
                     linkTitles[urlStr]?.let { recordClick(urlStr, it) }
-                    if (isHttp(urlStr)) localSearch.visit(urlStr)
                 }
 
                 if (urlStr.contains("web.whatsapp.com")) {
@@ -1388,9 +1368,7 @@ class MainActivity : ComponentActivity() {
                     when (u.host) {
                         "voice" -> launchVoice()
                         "photo" -> openPhotoSearch()
-                        "search" -> runLocalSearch(tab, u.getQueryParameter("q") ?: "")
                         "home" -> loadStart(tab.web)
-                        "crawl" -> showSearchIndexMenu()
                         "c" -> handleCommunity(tab, u)
                     }
                     return true
@@ -1668,9 +1646,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    /** Search URL of the user's own rweb-search server (ends with /search?q=), or null if not configured. */
-    private fun rwebSearchBase(): String? = prefs.getString("rweb_search_url", null)?.takeIf { it.isNotBlank() }
-
     private fun allEngines(): List<Pair<String, String>> {
         return baseEngines
     }
@@ -1682,7 +1657,7 @@ class MainActivity : ComponentActivity() {
 
     private fun chooseEngine() {
         val list = allEngines()
-        val names = (list.map { it.first } + (if (rwebSearchBase() == null) "Add rweb Search server\u2026" else "Edit rweb Search server\u2026")).toTypedArray()
+        val names = list.map { it.first }.toTypedArray()
         val idx = list.indexOfFirst { it.second == searchBase() }.coerceAtLeast(0)
         dlg()
             .setTitle("Search engine")
@@ -1691,40 +1666,8 @@ class MainActivity : ComponentActivity() {
                 if (i < list.size) {
                     prefs.edit().putString("search", list[i].second).apply()
                     toast(names[i])
-                } else {
-                    askRwebServer()
                 }
             }.show()
-    }
-
-    private fun askRwebServer() {
-        val input = EditText(this)
-        input.setSingleLine()
-        input.hint = "https://search.example.com"
-        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        input.setText(rwebSearchBase()?.substringBefore("/search?q=") ?: "")
-        dlg()
-            .setTitle("rweb Search server")
-            .setMessage("Address of your rwebsearch server. Leave empty to remove it.")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                var v = input.text.toString().trim().trimEnd('/')
-                if (v.isEmpty()) {
-                    prefs.edit().remove("rweb_search_url").apply()
-                    toast("rweb Search removed")
-                } else {
-                    if (!isHttp(v)) v = "https://" + v
-                    if (Uri.parse(v).host == null) {
-                        toast("That address isn't valid")
-                    } else {
-                        val url = v + "/search?q="
-                        prefs.edit().putString("rweb_search_url", url).putString("search", "rweb://search?q=").apply()
-                        toast("rweb Search selected (this phone + your server)")
-                    }
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     private fun esc(s: String): String =
@@ -1754,7 +1697,7 @@ class MainActivity : ComponentActivity() {
         val icons = siteIcons()
         val sb = StringBuilder()
         sb.append(HEAD_A.replaceFirst("<html>", if (isDark()) "<html class=\"dark\">" else "<html>"))
-        sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B.replace("<div class=\"grid\">", localBoxHtml() + "<div class=\"grid\">"))
+        sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B)
         for (t in tiles) {
             val letter = t.first.trim().take(1).uppercase()
             sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
@@ -1964,7 +1907,6 @@ class MainActivity : ComponentActivity() {
     private fun secureImage(u: String): String =
         if (u.startsWith("http://")) "https://" + u.removePrefix("http://") else u
 
-    /** Round-robin across feeds so no single site dominates; drops duplicate links and titles. */
     private fun mergeRoundRobin(
         results: Map<Int, List<Triple<String, String, String>>>,
         cap: Int
@@ -1992,9 +1934,6 @@ class MainActivity : ComponentActivity() {
         return out
     }
 
-    // ---- Asynchronous Streaming Videos Aggregation ----
-
-    /** Builds the video strip; returns "" when nothing with a thumbnail is available. */
     private fun buildVideos(items: List<Triple<String, String, String>>): String {
         val readSet = getReadArticles()
         val sorted = items
@@ -2024,7 +1963,6 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    /** Latest few videos of one YouTube channel feed: (title, link, thumbnail). */
     private fun fetchVideosForChannel(feedUrl: String, limit: Int = 3): List<Triple<String, String, String>> {
         val out = mutableListOf<Triple<String, String, String>>()
         val conn = URL(upgradeHttps(feedUrl)).openConnection() as HttpURLConnection
@@ -2120,7 +2058,7 @@ class MainActivity : ComponentActivity() {
             }
             val finalList = merged
             runOnUiThread {
-                vidLoading = false // always reset so the 15-minute refresh keeps working
+                vidLoading = false
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 val html = buildVideos(finalList)
                 if (html.isNotEmpty()) {
@@ -2134,8 +2072,6 @@ class MainActivity : ComponentActivity() {
             }
         }.start()
     }
-
-    // ---- News Aggregation ----
 
     private fun fetchNews(feed: String, limit: Int = 6): List<Triple<String, String, String>> {
         val out = mutableListOf<Triple<String, String, String>>()
@@ -2170,7 +2106,6 @@ class MainActivity : ComponentActivity() {
                         val u = parser.getAttributeValue(null, "url")
                         val type = parser.getAttributeValue(null, "type") ?: ""
                         val medium = parser.getAttributeValue(null, "medium") ?: ""
-                        // media:content with no type/medium (e.g. The Guardian) is normally the image
                         if (u != null && image.isEmpty() && (tag == "media:thumbnail" || type.startsWith("image") || medium == "image" ||
                                 (tag == "media:content" && type.isEmpty() && medium.isEmpty()))
                         ) {
@@ -2203,7 +2138,6 @@ class MainActivity : ComponentActivity() {
         return out
     }
 
-    /** Builds the news list; only stories with a thumbnail are shown. Returns "" when there are none yet. */
     private fun buildNews(name: String, items: List<Triple<String, String, String>>): String {
         val open = prefs.getBoolean("news_open", true)
         val readSet = getReadArticles()
@@ -2290,7 +2224,6 @@ class MainActivity : ComponentActivity() {
                 }
                 latch.await(12, TimeUnit.SECONDS)
                 pool.shutdownNow()
-                // snapshot after shutdown, then interleave sources; thumbnails are filtered when rendering
                 merged = mergeRoundRobin(HashMap(results), POOL_SIZE)
             } catch (e: Exception) {
             }
@@ -2558,7 +2491,6 @@ class MainActivity : ComponentActivity() {
         return row
     }
 
-    // --- Bounded memory caches (oldest entries are dropped, so they cannot grow without limit) ---
     private val ogCache = object : LinkedHashMap<String, String>(1000, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 1000
     }
@@ -2625,7 +2557,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Looks up og:image for stories whose feed had no thumbnail, then refreshes the list. */
     private fun enrichNews(items: List<Triple<String, String, String>>, name: String) {
         val readSet = getReadArticles()
         val todo = items.filter {
@@ -2833,7 +2764,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Page script for the start page. filterCategory lives here because scripts inserted via innerHTML never run. */
     private fun searchScript(): String {
         val b = typedSearchBases()
         return "<script>var B={web:" + JSONObject.quote(b.first) + ",img:" + JSONObject.quote(b.second) + ",vid:" + JSONObject.quote(b.third) +
@@ -2842,7 +2772,6 @@ class MainActivity : ComponentActivity() {
             "function go(){var v=document.getElementById('q').value.trim();if(!v){return false;}location.href=B[cur]+encodeURIComponent(v);return false;}" +
             "function cnt(){var t=document.getElementById('cx'),n=document.getElementById('cn');if(t&&n){n.textContent=200-t.value.length;}}" +
             "function cpost(){var t=document.getElementById('cx'),u=document.getElementById('cu');var x=t?t.value.trim():'',l=u?u.value.trim():'';if(!x&&!l){return false;}location.href='rweb://c/post?text='+encodeURIComponent(x)+'&url='+encodeURIComponent(l);return false;}" +
-            "function lgo(){var v=document.getElementById('lq');if(!v){return false;}v=v.value.trim();if(!v){return false;}location.href='rweb://search?q='+encodeURIComponent(v);return false;}" +
             "function filterCategory(c){document.querySelectorAll('.nw,.vc').forEach(function(e){e.style.display=(c==='All'||e.getAttribute('data-cat')===c)?'':'none';});}</script>"
     }
 
@@ -3073,7 +3002,6 @@ class MainActivity : ComponentActivity() {
         toast(if (paused) "Blocking paused on " + host else "Blocking active on " + host)
     }
 
-    // --- Custom Feed Manager Dialogs ---
     private fun showCustomFeedManager(isVideos: Boolean) {
         val key = if (isVideos) "custom_video_feeds" else "custom_news_feeds"
         val title = if (isVideos) "Manage Custom Video Channels" else "Manage Custom News Feeds"
@@ -3144,302 +3072,9 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    // ================= on-device search: homepage box, results page, crawling, indexing =================
+    private fun serverApiBase(): String? = null
 
-    private fun indexVisited(): Boolean = prefs.getBoolean("index_visited", true)
-    private fun wifiOnly(): Boolean = prefs.getBoolean("crawl_wifi", true)
-
-    private val defaultCrawlSeeds = listOf(
-        "https://en.wikipedia.org/wiki/Main_Page",
-        "https://developer.mozilla.org/en-US/",
-        "https://www.bbc.com/news",
-        "https://www.theguardian.com/international",
-        "https://www.nature.com/",
-        "https://www.nasa.gov/"
-    )
-
-    private fun crawlSeeds(): List<String> {
-        val saved = prefs.getString("crawl_seeds", null) ?: return defaultCrawlSeeds
-        return saved.lines().map { it.trim() }.filter { isHttp(it) }
-    }
-
-    private fun localBoxHtml(): String {
-        val n = localSearch.count()
-        val hint = if (n == 0) "Search with rweb (empty index: menu > Search index)" else "Search with rweb \u00B7 " + n + " pages" + (if (serverApiBase() != null) " + your server" else "")
-        return "<form class=\"lf\" onsubmit=\"return lgo()\"><input id=\"lq\" placeholder=\"" + esc(hint) + "\" autocomplete=\"off\"></form>"
-    }
-
-    private val localCss = """
-        :root{--bg:#fff;--fg:#202124;--mute:#5f6368;--card:#f8f9fa;--fld:#f1f3f4;--acc:#c41e3a;--link:#1a0dab}
-        html.dark{--bg:#3a0a14;--fg:#fff1f3;--mute:#e3a9b1;--card:#7a1022;--fld:#7a1022;--acc:#ff6b7d;--link:#ffb3be}
-        *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:sans-serif;line-height:1.45}
-        a{color:var(--link);text-decoration:none}
-        header{display:flex;gap:12px;align-items:center;padding:12px 14px;position:sticky;top:0;background:var(--bg)}
-        .lg{color:var(--acc);font-weight:700;font-size:22px}header form{flex:1;margin:0}
-        input{width:100%;padding:12px 18px;border-radius:26px;border:2px solid var(--acc);background:var(--fld);color:var(--fg);font-size:16px;outline:none}
-        main{padding:4px 16px 40px;max-width:720px;margin:0 auto}.info{color:var(--mute);font-size:13px;margin:6px 0 14px}
-        .r{margin:0 0 20px}.u{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .t{font-size:18px;display:block;margin:2px 0}.s{font-size:14px;word-wrap:break-word}mark{background:none;color:var(--acc);font-weight:600}
-        .web{margin:22px 0 8px}.web a{display:block;padding:12px 16px;border-radius:18px;background:var(--fld);margin-bottom:8px;color:var(--fg)}
-        .top{display:block;padding:14px 16px;border-radius:18px;background:var(--card);margin:0 0 18px;border:2px solid var(--acc);color:var(--fg)}.top b{display:block;font-size:19px;margin:2px 0;color:var(--link)}.tl{color:var(--acc);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}.src{color:var(--acc)}.none{margin-top:36px;text-align:center;color:var(--mute)}.none a{display:inline-block;margin-top:14px;padding:10px 20px;border-radius:20px;background:var(--acc);color:#fff}
-    """
-
-    private class SrcHit(val hit: LocalSearch.Hit, val source: String)
-
-    private fun serverApiBase(): String? = rwebSearchBase()?.substringBefore("/search?q=")?.takeIf { isHttp(it) }
-
-    /** Results from your rweb-search server (empty when none is set up or it is unreachable). */
-    private fun fetchServerHits(q: String): List<LocalSearch.Hit> {
-        val base = serverApiBase() ?: return emptyList()
-        val out = ArrayList<LocalSearch.Hit>()
-        try {
-            val c = URL(base + "/api/search?n=10&q=" + Uri.encode(q)).openConnection() as HttpURLConnection
-            c.connectTimeout = 4000
-            c.readTimeout = 4000
-            c.setRequestProperty("User-Agent", "rweb-browser")
-            try {
-                if (c.responseCode in 200..299) {
-                    val body = c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-                    val arr = JSONObject(body).getJSONArray("results")
-                    for (i in 0 until arr.length()) {
-                        val o = arr.getJSONObject(i)
-                        out.add(LocalSearch.Hit(o.optString("title"), o.getString("url"), o.optString("snippet")))
-                    }
-                }
-            } finally {
-                c.disconnect()
-            }
-        } catch (e: Exception) {
-        }
-        return out
-    }
-
-    private fun localResultsHtml(q: String, merged: List<SrcHit>, direct: LocalSearch.Hit?, indexSize: Int, serverOn: Boolean): String {
-        val sb = StringBuilder()
-        sb.append("<!doctype html><html").append(if (isDark()) " class=\"dark\"" else "").append("><head><meta charset=\"utf-8\">")
-        sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>").append(localCss).append("</style></head><body>")
-        sb.append("<header><a class=\"lg\" href=\"rweb://home\">rweb</a>")
-        sb.append("<form onsubmit=\"var v=this.q.value.trim();if(v){location.href='rweb://search?q='+encodeURIComponent(v);}return false\">")
-        sb.append("<input name=\"q\" value=\"").append(esc(q)).append("\" autocomplete=\"off\"></form></header><main>")
-
-        if (direct != null) {
-            sb.append("<a class=\"top\" href=\"").append(esc(direct.url)).append("\"><span class=\"tl\">Top result</span><b>")
-            sb.append(esc(direct.title.ifBlank { direct.url })).append("</b><span class=\"u\">").append(esc(direct.url)).append("</span></a>")
-        }
-        val rest = merged.filter { it.hit.url != direct?.url }
-        if (rest.isEmpty() && direct == null) {
-            if (indexSize == 0 && !serverOn) {
-                sb.append("<div class=\"none\">Your index is empty.<br>Crawl your favourite sites or just browse: pages you visit are added.<br>")
-                sb.append("<a href=\"rweb://crawl\">Build my index</a></div>")
-            } else {
-                sb.append("<div class=\"none\">Nothing found for <b>").append(esc(q)).append("</b>.<br>Try the web search below.</div>")
-            }
-        } else {
-            sb.append("<div class=\"info\">").append(rest.size + (if (direct != null) 1 else 0)).append(" results \u00B7 ")
-            sb.append(indexSize).append(" pages on this phone").append(if (serverOn) " + your server" else "").append("</div>")
-            for (m in rest) {
-                val snip = esc(m.hit.snippet).replace(LocalSearch.HL_OPEN, "<mark>").replace(LocalSearch.HL_CLOSE, "</mark>")
-                sb.append("<div class=\"r\"><div class=\"u\">").append(esc(m.hit.url)).append("<span class=\"src\"> \u00B7 ").append(esc(m.source)).append("</span></div>")
-                sb.append("<a class=\"t\" href=\"").append(esc(m.hit.url)).append("\">").append(esc(m.hit.title.ifBlank { m.hit.url })).append("</a>")
-                sb.append("<div class=\"s\">").append(snip).append("</div></div>")
-            }
-        }
-        val bases = typedSearchBases()
-        sb.append("<div class=\"web\">")
-        sb.append("<a href=\"").append(esc(engines0() + Uri.encode(q))).append("\">Search the web for \u201C").append(esc(q)).append("\u201D</a>")
-        sb.append("<a href=\"").append(esc(bases.second + Uri.encode(q))).append("\">Images</a></div></main></body></html>")
-        return sb.toString()
-    }
-
-    /** Google web-search URL prefix, used for the "Search the web" fallback. */
-    private fun engines0(): String = baseEngines[0].second
-
-    private fun openExact(): Boolean = prefs.getBoolean("open_exact", false)
-    private fun crawlBudget(): Int = prefs.getInt("crawl_pages", 150)
-    private val crawlSizes = listOf(150, 500, 1500)
-
-    /** rweb Search: your phone's index and your own server, side by side, plus a Top result for exact matches. */
-    private fun runLocalSearch(tab: Tab, query: String) {
-        val q = query.trim()
-        if (q.isEmpty()) return
-        Thread {
-            val remote = java.util.concurrent.atomic.AtomicReference<List<LocalSearch.Hit>>(emptyList())
-            val rt = Thread { remote.set(fetchServerHits(q)) }
-            rt.start()
-            val size = localSearch.count()
-            val local: List<LocalSearch.Hit> = try {
-                localSearch.search(q, 20).hits
-            } catch (e: Exception) {
-                emptyList()
-            }
-            rt.join(4500)
-            val r = remote.get()
-
-            val merged = ArrayList<SrcHit>()
-            val seen = HashSet<String>()
-            for (i in 0 until maxOf(local.size, r.size)) { // alternate: phone, server, phone, server...
-                if (i < local.size && seen.add(local[i].url.trimEnd('/'))) merged.add(SrcHit(local[i], "on this phone"))
-                if (i < r.size && seen.add(r[i].url.trimEnd('/'))) merged.add(SrcHit(r[i], "your server"))
-            }
-            val direct = LocalSearch.directMatch(q, merged.map { it.hit })
-
-            runOnUiThread {
-                if (isFinishing || isDestroyed || tabs.indexOf(tab) < 0) return@runOnUiThread
-                if (direct != null && openExact()) {
-                    navigate(tab, direct.url)
-                    return@runOnUiThread
-                }
-                tab.web.loadDataWithBaseURL(
-                    "https://rweb.local/", localResultsHtml(q, merged, direct, size, serverApiBase() != null), "text/html", "utf-8", null
-                )
-            }
-        }.start()
-    }
-
-    // ---- indexing the pages you visit (normal tabs only) ----
-
-    private val noIndexHosts = setOf(
-        "mail.google.com", "web.whatsapp.com", "accounts.google.com", "outlook.live.com", "outlook.office.com",
-        "drive.google.com", "docs.google.com", "calendar.google.com"
-    )
-    private val noIndexUrl = Regex("(login|log-in|signin|sign-in|signup|sign-up|auth|account|checkout|payment|password|banking)", RegexOption.IGNORE_CASE)
-
-    private val indexJs = """
-        (function(){try{
-          if(document.querySelector('input[type=password]'))return '';
-          var r=document.querySelector('meta[name=robots]');if(r&&/noindex/i.test(r.content))return '';
-          var d=document.querySelector('meta[name=description]');
-          return JSON.stringify({t:document.title||'',d:(d&&d.content)||'',x:((document.body&&document.body.innerText)||'').substring(0,30000)});
-        }catch(e){return ''}})()
-    """
-
-    private fun indexCurrentPage(view: WebView?, url: String) {
-        val web = view ?: return
-        val host = hostOf(url) ?: return
-        if (noIndexHosts.any { host == it || host.endsWith(".$it") } || noIndexUrl.containsMatchIn(url)) return
-        web.evaluateJavascript(indexJs) { raw ->
-            val text = try {
-                JSONTokener(raw ?: "null").nextValue() as? String
-            } catch (e: Exception) {
-                null
-            }
-            if (!text.isNullOrEmpty()) {
-                try {
-                    val o = JSONObject(text)
-                    localSearch.index(url, o.optString("t"), o.optString("d") + " " + o.optString("x"))
-                } catch (e: Exception) {
-                }
-            }
-        }
-    }
-
-    // ---- crawling ----
-
-    private fun isMetered(): Boolean = try {
-        (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
-    } catch (e: Exception) {
-        false // no permission or no service: do not block
-    }
-
-    private fun startCrawl() {
-        if (crawler.running) {
-            toast("Already crawling")
-            return
-        }
-        if (wifiOnly() && isMetered()) {
-            toast("Connect to Wi-Fi, or turn off \"Crawl on Wi-Fi only\"")
-            return
-        }
-        val seeds = (crawlSeeds() + loadList("bookmarks").map { it.second }).distinct()
-        if (seeds.isEmpty()) {
-            toast("Add some crawl sites first")
-            return
-        }
-        crawlStatus = "starting"
-        toast("Crawling in the background. Keep rweb open.")
-        Thread {
-            val n = try {
-                crawler.crawl(seeds, crawlBudget(), 2, maxOf(60, crawlBudget() / 5), 1000L) { count -> crawlStatus = count.toString() + " pages" }
-            } catch (e: Exception) {
-                0
-            }
-            runOnUiThread {
-                crawlStatus = ""
-                if (!isFinishing && !isDestroyed) toast("Indexed " + n + " new pages")
-            }
-        }.start()
-    }
-
-    private fun askCrawlSites() {
-        val input = EditText(this)
-        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_VARIATION_URI
-        input.minLines = 6
-        input.gravity = Gravity.TOP
-        input.setText(crawlSeeds().joinToString("\n"))
-        dlg()
-            .setTitle("Sites to crawl")
-            .setMessage("One address per line. Your bookmarks are crawled too.")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                val lines = input.text.toString().lines().map { it.trim() }.filter { isHttp(it) }
-                prefs.edit().putString("crawl_seeds", lines.joinToString("\n")).apply()
-                toast(lines.size.toString() + " sites saved")
-            }
-            .setNeutralButton("Reset") { _, _ -> prefs.edit().remove("crawl_seeds").apply() }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showSearchIndexMenu() {
-        val n = localSearch.count()
-        val running = crawler.running
-        val labels = arrayOf(
-            if (running) "Stop crawling (" + crawlStatus + ")" else "Crawl now",
-            "Edit sites to crawl",
-            "Index pages I visit: " + (if (indexVisited()) "On" else "Off"),
-            "Crawl on Wi-Fi only: " + (if (wifiOnly()) "On" else "Off"),
-            "Crawl size: " + crawlBudget() + " pages per run",
-            "Open exact matches directly: " + (if (openExact()) "On" else "Off"),
-            "Clear search index (" + n + " pages)"
-        )
-        dlg()
-            .setTitle("Search index \u00B7 " + n + " pages")
-            .setItems(labels) { _, i ->
-                when (i) {
-                    0 -> if (running) {
-                        crawler.stopRequested = true
-                        toast("Stopping\u2026")
-                    } else {
-                        startCrawl()
-                    }
-                    1 -> askCrawlSites()
-                    2 -> {
-                        prefs.edit().putBoolean("index_visited", !indexVisited()).apply()
-                        toast(if (indexVisited()) "Visited pages will be indexed" else "Visited pages are no longer indexed")
-                    }
-                    3 -> prefs.edit().putBoolean("crawl_wifi", !wifiOnly()).apply()
-                    4 -> {
-                        val next = crawlSizes[(crawlSizes.indexOf(crawlBudget()) + 1) % crawlSizes.size]
-                        prefs.edit().putInt("crawl_pages", next).apply()
-                        toast("Crawl size: " + next + " pages per run")
-                    }
-                    5 -> {
-                        prefs.edit().putBoolean("open_exact", !openExact()).apply()
-                        toast(if (openExact()) "Exact matches open directly" else "Exact matches show as Top result")
-                    }
-                    6 -> confirm("Clear search index?", "This deletes everything rweb has indexed. Your history and bookmarks stay.") {
-                        localSearch.clear()
-                        toast("Search index cleared")
-                    }
-                }
-            }
-            .setNegativeButton("Close", null)
-            .show()
-    }
-
-    // ================= Community: text + link posts, replies, follows (lives on your rweb server) =================
-
-    private val COMM_MAX = 200 // characters per post; keep in sync with POST_MAX in community.py
+    private val COMM_MAX = 200
     @Volatile private var commTab = "global"
     @Volatile private var commThread = 0L
     @Volatile private var commHtml: String? = null
@@ -3517,7 +3152,6 @@ class MainActivity : ComponentActivity() {
         return sb.toString()
     }
 
-    /** One post. Everything from the server is escaped; links are only shown if they are http(s). */
     private fun commPostHtml(o: JSONObject, me: String?, inThread: Boolean): String {
         val id = o.optLong("id")
         val user = o.optString("user")
@@ -3549,7 +3183,6 @@ class MainActivity : ComponentActivity() {
         return sb.toString()
     }
 
-    /** Fetches the feed (or an open thread) and returns the section's HTML. Runs on a background thread. */
     private fun buildCommunity(): String {
         val hadToken = prefs.getString("comm_token", null) != null
         val thread = commThread
@@ -3581,7 +3214,7 @@ class MainActivity : ComponentActivity() {
         }
         if (r.code != 200) return commMsgHtml(j.optString("error", "Something went wrong."))
         val me = jsonStr(j, "me")
-        if (hadToken && me == null) dropCommToken() // the session expired
+        if (hadToken && me == null) dropCommToken()
         val sb = StringBuilder(commHeader(me, true))
         val arr = j.getJSONArray("posts")
         if (arr.length() == 0) {
@@ -3625,7 +3258,6 @@ class MainActivity : ComponentActivity() {
     private fun apiError(r: ApiResult): String =
         r.json?.optString("error")?.takeIf { it.isNotEmpty() } ?: "Can't reach your rweb server"
 
-    /** A POST that changes something (follow, delete, report), then refreshes the feed. */
     private fun commAction(path: String, body: JSONObject, okMsg: String?) {
         Thread {
             val r = commCall("POST", path, body)
@@ -3716,10 +3348,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showCommunityLogin() {
-        if (serverApiBase() == null) {
-            askRwebServer()
-            return
-        }
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.setPadding(dp(20), dp(10), dp(20), dp(4))
@@ -3768,7 +3396,6 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
-    /** rweb://c/<action>?... links from the Community block on the start page. */
     private fun handleCommunity(tab: Tab, u: Uri) {
         when (u.lastPathSegment) {
             "tab" -> {
@@ -3807,7 +3434,7 @@ class MainActivity : ComponentActivity() {
                 commThread = 0L
                 refreshCommunity()
             }
-            "setup" -> askRwebServer()
+            "setup" -> toast("No server configured")
         }
     }
 
@@ -4143,7 +3770,6 @@ class MainActivity : ComponentActivity() {
             MenuRow("360 / VR video viewer", null, false) { openVrViewer() },
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", allEngines().first { it.second == searchBase() }.first, false) { chooseEngine() },
-            MenuRow("Search index", localSearch.count().toString() + " pages", false) { showSearchIndexMenu() },
             MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
             MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
@@ -4246,7 +3872,6 @@ class MainActivity : ComponentActivity() {
         WebStorage.getInstance().deleteAllData()
         GeolocationPermissions.getInstance().clearAll()
         saveList("history", emptyList())
-        localSearch.clear()
         dropCommToken()
         toast("Browsing data cleared")
     }
