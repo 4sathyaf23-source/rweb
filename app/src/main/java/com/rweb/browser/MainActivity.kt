@@ -2708,19 +2708,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
-    try {
-        val file = File(filesDir, "offline_" + url.hashCode() + ".html")
-        val fullDoc = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${esc(title)}</title></head><body><h1>${esc(title)}</h1>$contentHtml</body></html>"
-        file.writeText(fullDoc)
-        
-        // Trim cache immediately after saving a new one
-        trimOfflineCache()
-    } catch (e: Exception) {
-        Log.e("rweb", "saveOfflineArticle failed for URL: $url", e)
-    }
-}
-
     private fun getOfflineArticle(url: String): String? {
         try {
             val file = File(filesDir, "offline_" + url.hashCode() + ".html")
