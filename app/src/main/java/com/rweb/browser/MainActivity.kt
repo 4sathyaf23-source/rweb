@@ -2557,10 +2557,26 @@ class MainActivity : ComponentActivity() {
         return row
     }
 
-    private val ogCache = HashMap<String, String>()
-    private val ogVideo = HashSet<String>()
+        // --- Bounded Memory Caches (Prevents memory growth) ---
+    private val ogCache = object : LinkedHashMap<String, String>(1000, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+            return size > 1000
+        }
+    }
 
-    private fun firstImageIn(html: String): String {
+    private val ogVideo = object : LinkedHashSet<String>() {
+        override fun add(element: String): Boolean {
+            if (size >= 1000) {
+                val iterator = iterator()
+                if (iterator.hasNext()) {
+                    iterator.next()
+                    iterator.remove()
+                }
+            }
+            return super.add(element)
+        }
+    }
+
         val m = Regex("<img[^>]+src=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html) ?: return ""
         var u = m.groupValues[1].replace("&amp;", "&").trim()
         if (u.startsWith("//")) u = "https:" + u
