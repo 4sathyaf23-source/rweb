@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-rweb-search: a small, self-hostable web search engine.
+rweb-search: a small, self-hostable web search engine (v0.2).
 
   crawl  - polite crawler (robots.txt, per-domain delay, size/type limits, SSRF guard)
   rank   - PageRank-style link score over everything crawled so far
   serve  - results page for phones + JSON API (/search?q=..., /api/search?q=...)
   query  - run a search from the command line
   stats  - what is in the index
+  export - export indexed pages as JSON
 
 Index: SQLite FTS5 (porter stemming, BM25 with title weighted above body),
-re-ranked with link popularity and a per-domain diversity cap.
+re-ranked with link popularity, recency, and a per-domain diversity cap.
 Standard library only. Python 3.9+.
 """
 from __future__ import annotations
@@ -37,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from string import Template
 
 BOT = "rweb-bot"
-UA = BOT + "/0.1 (personal search engine; honours robots.txt)"
+UA = BOT + "/0.2 (personal search engine; honours robots.txt)"
 CONFIG = {"allow_private": False}
 
 SCHEMA = """
@@ -286,14 +287,13 @@ class Extract(HTMLParser):
     def result(self):
         squash = lambda s: re.sub(r"\s+", " ", s).strip()
         body = squash("".join(self.body))
-        if len(body) < 200:  # boilerplate filter ate everything (e.g. unclosed <nav>): keep all text
+        if len(body) < 200:
             body = squash("".join(self.all_text))
         title = squash(self.title) or squash(self.og_title) or squash(self.h1)
         return title[:300], squash(self.desc)[:400], body[:100_000]
 
 
 def analyze(final, text):
-    """Parse one fetched page into everything the indexer needs."""
     ex = Extract()
     try:
         ex.feed(text)
@@ -336,7 +336,7 @@ class DB:
             self.c.executescript(SCHEMA)
             have = {r[1] for r in self.c.execute("PRAGMA table_info(pages)")}
             for col, ddl in (("etag", "TEXT"), ("lastmod", "TEXT"), ("fails", "INTEGER DEFAULT 0")):
-                if col not in have:  # databases created before re-crawl support
+                if col not in have:
                     self.c.execute("ALTER TABLE pages ADD COLUMN %s %s" % (col, ddl))
             self.c.commit()
 
@@ -347,7 +347,6 @@ class DB:
             return cur.fetchall()
 
     def add_frontier(self, url, depth):
-        """True if the URL was new."""
         with self.lock:
             cur = self.c.execute(
                 "INSERT OR IGNORE INTO frontier(url, depth, added) VALUES(?,?,?)", (url, depth, int(time.time()))
@@ -395,7 +394,6 @@ class DB:
             self.c.commit()
 
     def bump_fail(self, url, max_fails=5):
-        """A failed re-check: retry on the next cycle, drop the page after repeated failures."""
         self.q("UPDATE pages SET fails=fails+1, fetched=? WHERE url=?", (int(time.time()), url))
         rows = self.q("SELECT fails FROM pages WHERE url=?", (url,))
         if rows and rows[0][0] >= max_fails:
@@ -445,7 +443,7 @@ def crawl(db, seeds, max_pages=200, max_depth=2, per_domain=100, delay=1.0, work
                     dom_count[dom] += 1
                     state["taken"] += 1
                     state["active"] += 1
-                    next_ok[dom] = now + 3600  # reserved until this fetch finishes
+                    next_ok[dom] = now + 3600
                 elif not queue and state["active"] == 0:
                     return None
             for u in dropped:
@@ -547,7 +545,6 @@ def pagerank(db, iters=30, damping=0.85):
 
 
 def refresh(db, max_age=7 * 86400, limit=200, delay=1.0, allow_private=False, log=print):
-    """Re-check the stalest pages. 304 = unchanged, 404/410 or noindex = removed, changed = re-indexed."""
     CONFIG["allow_private"] = allow_private
     robots = Robots()
     stats = collections.Counter()
@@ -566,7 +563,7 @@ def refresh(db, max_age=7 * 86400, limit=200, delay=1.0, allow_private=False, lo
                 continue
             wait = max(delay, robots.delay(url))
             got = fetch(url, etag=r["etag"], lastmod=r["lastmod"])
-            if got is None:  # no longer an HTML page
+            if got is None:
                 db.delete_page(url)
                 stats["removed"] += 1
                 continue
@@ -580,7 +577,7 @@ def refresh(db, max_age=7 * 86400, limit=200, delay=1.0, allow_private=False, lo
                 db.delete_page(url)
                 stats["removed"] += 1
                 continue
-            if final != url:  # moved: keep the new address only
+            if final != url:
                 db.delete_page(url)
             if final == url and a["digest"] == r["hash"]:
                 db.touch_page(url, got["etag"], got["lastmod"])
@@ -590,7 +587,7 @@ def refresh(db, max_age=7 * 86400, limit=200, delay=1.0, allow_private=False, lo
                 stats["updated"] += 1
                 for u, nf in a["links"]:
                     if not nf:
-                        db.add_frontier(u, 1)  # new links are picked up by the next crawl pass
+                        db.add_frontier(u, 1)
         except urllib.error.HTTPError as e:
             if e.code in (404, 410):
                 db.delete_page(url)
@@ -611,7 +608,6 @@ def refresh(db, max_age=7 * 86400, limit=200, delay=1.0, allow_private=False, lo
 
 
 def maintenance(db_path, every_hours, refresh_limit, crawl_batch, max_age_days, delay, stop):
-    """Background loop used by `serve`: refresh stale pages, crawl newly found links, recompute ranks."""
     db = DB(db_path)
     log = lambda m: sys.stderr.write("[maintenance] %s\n" % m)
     if stop.wait(60):
@@ -659,7 +655,7 @@ def fts_expr(pos, phrases, neg, mode="and"):
     for i, t in enumerate(pos):
         s = '"%s"' % t
         if mode == "and" and i == len(pos) - 1 and not phrases and len(t) >= 2:
-            s += "*"  # type-ahead style match on the last word
+            s += "*"
         parts.append(s)
     parts += ['"%s"' % p for p in phrases]
     if not parts:
@@ -679,7 +675,7 @@ def search(db_path, q, page=1, per=10):
     con = sqlite3.connect(db_path, timeout=30)
     con.row_factory = sqlite3.Row
     sql = (
-        "SELECT p.url, p.title, p.description, p.domain, p.rank, p.inlinks, bm25(pages_fts, 6.0, 1.0) AS s, "
+        "SELECT p.url, p.title, p.description, p.domain, p.rank, p.inlinks, p.fetched, bm25(pages_fts, 6.0, 1.0) AS s, "
         "snippet(pages_fts, 1, '%s', '%s', ' \u2026 ', 28) AS snip "
         "FROM pages_fts JOIN pages p ON p.id = pages_fts.rowid WHERE pages_fts MATCH ?" % (HL_OPEN, HL_CLOSE)
     )
@@ -702,14 +698,17 @@ def search(db_path, q, page=1, per=10):
     finally:
         con.close()
 
+    now = time.time()
     scored = []
     for r in rows:
-        relevance = -r["s"]  # bm25() is lower-is-better and negative
-        boost = 1.0 + 1.5 * math.sqrt(max(r["rank"], 0.0))
-        scored.append((relevance * boost, r))
+        relevance = -r["s"]
+        auth_boost = 1.0 + 1.5 * math.sqrt(max(r["rank"], 0.0))
+        # Recency boost: pages fetched within the last 7 days get up to a 15% boost
+        age_days = max(0.0, (now - (r["fetched"] or now)) / 86400.0)
+        recency_boost = 1.0 + 0.15 * max(0.0, (7.0 - age_days) / 7.0)
+        scored.append((relevance * auth_boost * recency_boost, r))
     scored.sort(key=lambda x: -x[0])
 
-    # diversity: at most 2 results per domain ahead of the rest
     seen = collections.Counter()
     first, later = [], []
     for sc, r in scored:
@@ -740,9 +739,7 @@ def search(db_path, q, page=1, per=10):
     }
 
 
-# ---------------------------------------------------------------- optional fallback source
-# Off by default. When enabled and local results are thin, the query is also sent to the provider (the query
-# leaves your server) and its hits are shown below yours, labelled with their source.
+# ---------------------------------------------------------------- external fallback
 
 EXT_CACHE = {}
 EXT_LOCK = threading.Lock()
@@ -786,7 +783,7 @@ def external_results(q, provider, ttl=600):
     try:
         res = fn(q)
     except Exception:
-        return []  # failures are not cached
+        return []
     with EXT_LOCK:
         if len(EXT_CACHE) > 500:
             EXT_CACHE.clear()
@@ -931,7 +928,6 @@ def make_handler(db_path, limiter, trust_proxy, fallback=None, fallback_min=5):
             return self.client_address[0]
 
         def _external(self, q, res, page):
-            """Fallback hits, only on page 1 and only when local results are thin."""
             if not fallback or page != 1 or res["total"] >= fallback_min:
                 return []
             pos, phrases, _, _ = parse_query(q)
@@ -980,7 +976,7 @@ def make_handler(db_path, limiter, trust_proxy, fallback=None, fallback_min=5):
                 return self._send(404, "text/plain; charset=utf-8", "Not found")
             except ValueError:
                 return self._send(400, "text/plain; charset=utf-8", "Bad request")
-            except Exception as e:  # never leak internals
+            except Exception as e:
                 sys.stderr.write("error: %r\n" % (e,))
                 return self._send(500, "text/plain; charset=utf-8", "Server error")
 
@@ -988,12 +984,12 @@ def make_handler(db_path, limiter, trust_proxy, fallback=None, fallback_min=5):
 
 
 def serve(db_path, host, port, rate=120, trust_proxy=False, fallback=None, fallback_min=5, maintain=None):
-    DB(db_path)  # make sure the schema exists
+    DB(db_path)
     stop = threading.Event()
     if maintain:
         threading.Thread(target=maintenance, args=(db_path, *maintain, stop), daemon=True).start()
     httpd = ThreadingHTTPServer((host, port), make_handler(db_path, RateLimit(rate), trust_proxy, fallback, fallback_min))
-    print("rweb-search listening on http://%s:%d  (db: %s)" % (host, port, db_path))
+    print("rweb-search v0.2 listening on http://%s:%d  (db: %s)" % (host, port, db_path))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -1012,7 +1008,7 @@ def read_seeds(path):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="rweb-search: crawl, rank and serve your own web index")
+    ap = argparse.ArgumentParser(description="rweb-search v0.2: crawl, rank and serve your own web index")
     ap.add_argument("--db", default="rweb.db")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -1037,16 +1033,22 @@ def main(argv=None):
     s.add_argument("--max-age-days", type=float, default=7, help="a page is stale after this many days")
     s.add_argument("--maintain-delay", type=float, default=1.0)
     s.add_argument("--fallback", choices=["none", "wikipedia"], default="none",
-                   help="when local results are thin, also show hits from this source (sends the query to it)")
+                   help="when local results are thin, also show hits from this source")
     s.add_argument("--fallback-min", type=int, default=5, help="use the fallback when fewer local results than this")
     s.add_argument("--wiki-lang", default="en", help="Wikipedia language code for --fallback wikipedia")
-    r = sub.add_parser("refresh", help="re-check the stalest pages once (use from cron if you do not run `serve`)")
+
+    r = sub.add_parser("refresh", help="re-check the stalest pages once")
     r.add_argument("--max-age-days", type=float, default=7)
     r.add_argument("--limit", type=int, default=200)
     r.add_argument("--delay", type=float, default=1.0)
+
     q = sub.add_parser("query")
     q.add_argument("text")
+
     sub.add_parser("stats")
+
+    ex = sub.add_parser("export", help="export all indexed pages as JSON")
+    ex.add_argument("--output", default="rweb_export.json")
 
     a = ap.parse_args(argv)
     if a.cmd == "crawl":
@@ -1082,6 +1084,12 @@ def main(argv=None):
         print("links:    %d" % one("SELECT count(*) FROM links"))
         print("pending:  %d" % one("SELECT count(*) FROM frontier WHERE status=0"))
         print("db size:  %.1f MB" % (os.path.getsize(a.db) / 1e6))
+    elif a.cmd == "export":
+        db = DB(a.db)
+        rows = [dict(r) for r in db.q("SELECT url, domain, title, description, fetched, rank, inlinks FROM pages")]
+        with open(a.output, "w", encoding="utf-8") as f:
+            json.dump(rows, f, indent=2)
+        print("Exported %d pages to %s" % (len(rows), a.output))
 
 
 if __name__ == "__main__":
