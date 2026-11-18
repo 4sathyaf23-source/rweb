@@ -138,7 +138,6 @@ def decode(raw, ctype):
 
 
 def fetch(url, timeout=10, max_bytes=1_000_000, etag=None, lastmod=None):
-    """None if the URL is not HTML, else {status, final, text, etag, lastmod}. status 304 = unchanged since last fetch."""
     headers = {"User-Agent": UA, "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1", "Accept-Language": "en"}
     if etag:
         headers["If-None-Match"] = etag
@@ -225,7 +224,7 @@ class Extract(HTMLParser):
         self.base = None
         self.noindex = False
         self.nofollow = False
-        self.links = []  # (href, nofollow)
+        self.links = []
         self.body = []
         self.all_text = []
         self._skip = 0
@@ -703,7 +702,6 @@ def search(db_path, q, page=1, per=10):
     for r in rows:
         relevance = -r["s"]
         auth_boost = 1.0 + 1.5 * math.sqrt(max(r["rank"], 0.0))
-        # Recency boost: pages fetched within the last 7 days get up to a 15% boost
         age_days = max(0.0, (now - (r["fetched"] or now)) / 86400.0)
         recency_boost = 1.0 + 0.15 * max(0.0, (7.0 - age_days) / 7.0)
         scored.append((relevance * auth_boost * recency_boost, r))
@@ -955,7 +953,7 @@ def make_handler(db_path, limiter, trust_proxy, fallback=None, fallback_min=5):
                     res = search(db_path, q, page)
                     return self._send(200, "text/html; charset=utf-8", results_page(res, self._external(q, res, page)))
                 if u.path == "/api/search":
-                    page = min(max(int(first("p", "1") or 1), 1), 30)
+                    page = min(max(int(first("p", "1") or 1), 1), 1)
                     per = min(max(int(first("n", "10") or 10), 1), 50)
                     res = search(db_path, first("q"), page, per)
                     res["external"] = self._external(first("q"), res, page)
