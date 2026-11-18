@@ -2695,16 +2695,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun trimOfflineCache() {
-    try {
-        val files = filesDir.listFiles()
-            ?.filter { it.name.startsWith("offline_") }
-            ?.sortedByDescending { it.lastModified() }
-
-        // Keep the latest 100 offline articles, delete the rest to save disk space
-        files?.drop(100)?.forEach { it.delete() }
-    } catch (e: Exception) {
-        Log.e("rweb", "trimOfflineCache failed", e)
+    private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
+    runIo {
+        try {
+            val file = File(filesDir, "offline_" + url.hashCode() + ".html")
+            val fullDoc = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${esc(title)}</title></head><body><h1>${esc(title)}</h1>$contentHtml</body></html>"
+            file.writeText(fullDoc)
+            trimOfflineCache()
+        } catch (e: Exception) {
+            Log.e("rweb", "saveOfflineArticle failed for URL: $url", e)
+        }
     }
 }
 
