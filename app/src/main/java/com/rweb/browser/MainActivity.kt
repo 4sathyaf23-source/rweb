@@ -2695,7 +2695,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
+    private fun trimOfflineCache() {
+    try {
+        val files = filesDir.listFiles()
+            ?.filter { it.name.startsWith("offline_") }
+            ?.sortedByDescending { it.lastModified() }
+
+        files?.drop(100)?.forEach { it.delete() }
+    } catch (e: Exception) {
+        Log.e("rweb", "trimOfflineCache failed", e)
+    }
+}
+
+private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
     runIo {
         try {
             val file = File(filesDir, "offline_" + url.hashCode() + ".html")
@@ -2707,7 +2719,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
     private fun getOfflineArticle(url: String): String? {
         try {
             val file = File(filesDir, "offline_" + url.hashCode() + ".html")
