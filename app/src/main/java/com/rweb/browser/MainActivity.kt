@@ -39,6 +39,7 @@ import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
 import android.text.TextUtils
+import android.util.Log
 import android.util.Xml
 import android.view.Gravity
 import android.view.KeyEvent
@@ -2557,26 +2558,25 @@ class MainActivity : ComponentActivity() {
         return row
     }
 
-        // --- Bounded Memory Caches (Prevents memory growth) ---
+    // --- Bounded memory caches (oldest entries are dropped, so they cannot grow without limit) ---
     private val ogCache = object : LinkedHashMap<String, String>(1000, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
-            return size > 1000
-        }
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 1000
     }
 
     private val ogVideo = object : LinkedHashSet<String>() {
         override fun add(element: String): Boolean {
             if (size >= 1000) {
-                val iterator = iterator()
-                if (iterator.hasNext()) {
-                    iterator.next()
-                    iterator.remove()
+                val it = iterator()
+                if (it.hasNext()) {
+                    it.next()
+                    it.remove()
                 }
             }
             return super.add(element)
         }
     }
 
+    private fun firstImageIn(html: String): String {
         val m = Regex("<img[^>]+src=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html) ?: return ""
         var u = m.groupValues[1].replace("&amp;", "&").trim()
         if (u.startsWith("//")) u = "https:" + u
@@ -2696,29 +2696,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun trimOfflineCache() {
-    try {
-        val files = filesDir.listFiles()
-            ?.filter { it.name.startsWith("offline_") }
-            ?.sortedByDescending { it.lastModified() }
-
-        files?.drop(100)?.forEach { it.delete() }
-    } catch (e: Exception) {
-        Log.e("rweb", "trimOfflineCache failed", e)
-    }
-}
-
-private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
-    runIo {
         try {
-            val file = File(filesDir, "offline_" + url.hashCode() + ".html")
-            val fullDoc = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${esc(title)}</title></head><body><h1>${esc(title)}</h1>$contentHtml</body></html>"
-            file.writeText(fullDoc)
-            trimOfflineCache()
+            filesDir.listFiles()
+                ?.filter { it.name.startsWith("offline_") }
+                ?.sortedByDescending { it.lastModified() }
+                ?.drop(100)
+                ?.forEach { it.delete() }
         } catch (e: Exception) {
-            Log.e("rweb", "saveOfflineArticle failed for URL: $url", e)
+            Log.e("rweb", "trimOfflineCache failed", e)
         }
     }
-}
+
+    private fun saveOfflineArticle(url: String, title: String, contentHtml: String) {
+        runIo {
+            try {
+                val file = File(filesDir, "offline_" + url.hashCode() + ".html")
+                val fullDoc = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${esc(title)}</title></head><body><h1>${esc(title)}</h1>$contentHtml</body></html>"
+                file.writeText(fullDoc)
+                trimOfflineCache()
+            } catch (e: Exception) {
+                Log.e("rweb", "saveOfflineArticle failed for URL: $url", e)
+            }
+        }
+    }
+
     private fun getOfflineArticle(url: String): String? {
         try {
             val file = File(filesDir, "offline_" + url.hashCode() + ".html")
@@ -2876,7 +2877,7 @@ private fun saveOfflineArticle(url: String, title: String, contentHtml: String) 
     private fun openPhotoSearch() {
         hideSuggestions()
         val url = if (searchBase().startsWith("https://www.bing.com")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
-        currentOrNull()?.let { navigate(it, url) }
+        currentOrNull()?.web?.loadUrl(url)
         toast("Choose or take a photo on the page")
     }
 
