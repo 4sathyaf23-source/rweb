@@ -1,9 +1,0 @@
-# One start URL per line. Edit freely: the crawler follows links from these (depth/limits are set on the command line).
-https://en.wikipedia.org/wiki/Main_Page
-https://developer.mozilla.org/en-US/
-https://docs.python.org/3/
-https://www.bbc.com/news
-https://www.theguardian.com/international
-https://www.nature.com/
-https://www.nasa.gov/
-https://stackoverflow.com/questions
