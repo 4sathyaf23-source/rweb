@@ -35,6 +35,7 @@ import android.os.Message
 import android.speech.RecognizerIntent
 import android.provider.MediaStore
 import android.text.Editable
+import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
 import android.text.TextUtils
@@ -428,7 +429,7 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}.lf{margin-top:14px}.lf input{border:2px solid var(--acc);box-shadow:none}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}.lf{margin-top:14px}.lf input{border:2px solid var(--acc);box-shadow:none}#comm{width:100%;max-width:520px;margin-top:24px}.cb{background:var(--card);border-radius:18px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--sh)}.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;color:var(--mute)}.cu{font-weight:700;color:var(--acc)}.ct{white-space:pre-wrap;word-wrap:break-word;font-size:15px}.cl{display:block;margin-top:6px;font-size:13px;color:var(--acc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ca{display:flex;gap:16px;margin-top:8px;font-size:13px}.ca a{color:var(--mute);text-decoration:none}.cf{padding:4px 12px;border-radius:14px;background:var(--fld);color:var(--fg);font-size:12px;text-decoration:none}.cf.on{background:var(--acc);color:#fff}.ctabs{display:flex;gap:8px;margin:6px 0 10px}.cta{padding:6px 16px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;text-decoration:none}.cta.on{background:var(--acc);color:#fff}.cc textarea{width:100%;box-sizing:border-box;border:0;border-radius:14px;padding:12px;background:var(--fld);color:var(--fg);font-size:15px;font-family:inherit;resize:none;outline:none}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
 
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
@@ -984,6 +985,7 @@ class MainActivity : ComponentActivity() {
         web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
         refreshVideos()
         refreshNews()
+        refreshCommunity()
     }
 
     private fun thirdPartyCookies(): Boolean = prefs.getBoolean("tpc", true)
@@ -1317,6 +1319,7 @@ class MainActivity : ComponentActivity() {
                     tab.title = "New tab"
                     if (!tab.priv) vidHtml?.let { injectVideos(tab.web, it) }
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
+                    if (!tab.priv) commHtml?.let { injectComm(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
             }
@@ -1387,6 +1390,7 @@ class MainActivity : ComponentActivity() {
                         "search" -> runLocalSearch(tab, u.getQueryParameter("q") ?: "")
                         "home" -> loadStart(tab.web)
                         "crawl" -> showSearchIndexMenu()
+                        "c" -> handleCommunity(tab, u)
                     }
                     return true
                 }
@@ -1766,7 +1770,7 @@ class MainActivity : ComponentActivity() {
             sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
-        sb.append("</div><div id=\"vids\">")
+        sb.append("</div><div id=\"comm\">").append(commHtml ?: commMsgHtml("Loading community\u2026")).append("</div><div id=\"vids\">")
         sb.append(vidHtml ?: "<div class=\"nh\">Loading top news videos...</div>")
         sb.append("</div><div id=\"news\">")
         sb.append(newsHtml ?: "<div class=\"nh\">Loading aggregated news...</div>")
@@ -2803,6 +2807,8 @@ class MainActivity : ComponentActivity() {
             "};var cur='web';function pick(k){cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
             "document.getElementById('q').placeholder=(k==='web')?'Search the web':(k==='img'?'Search images':'Search videos');}" +
             "function go(){var v=document.getElementById('q').value.trim();if(!v){return false;}location.href=B[cur]+encodeURIComponent(v);return false;}" +
+            "function cnt(){var t=document.getElementById('cx'),n=document.getElementById('cn');if(t&&n){n.textContent=200-t.value.length;}}" +
+            "function cpost(){var t=document.getElementById('cx'),u=document.getElementById('cu');var x=t?t.value.trim():'',l=u?u.value.trim():'';if(!x&&!l){return false;}location.href='rweb://c/post?text='+encodeURIComponent(x)+'&url='+encodeURIComponent(l);return false;}" +
             "function lgo(){var v=document.getElementById('lq');if(!v){return false;}v=v.value.trim();if(!v){return false;}location.href='rweb://search?q='+encodeURIComponent(v);return false;}" +
             "function filterCategory(c){document.querySelectorAll('.nw,.vc').forEach(function(e){e.style.display=(c==='All'||e.getAttribute('data-cat')===c)?'':'none';});}</script>"
     }
@@ -2838,7 +2844,7 @@ class MainActivity : ComponentActivity() {
     private fun openPhotoSearch() {
         hideSuggestions()
         val url = if (searchBase().startsWith("https://www.bing.com")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
-        currentOrNull()?.web?.loadUrl(url)
+        currentOrNull()?.let { navigate(it, url) }
         toast("Choose or take a photo on the page")
     }
 
@@ -3398,6 +3404,380 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    // ================= Community: text + link posts, replies, follows (lives on your rweb server) =================
+
+    private val COMM_MAX = 200 // characters per post; keep in sync with POST_MAX in community.py
+    @Volatile private var commTab = "global"
+    @Volatile private var commThread = 0L
+    @Volatile private var commHtml: String? = null
+
+    private class ApiResult(val code: Int, val json: JSONObject?)
+
+    private fun commCall(method: String, path: String, body: JSONObject? = null): ApiResult {
+        val base = serverApiBase() ?: return ApiResult(0, null)
+        return try {
+            val c = URL(base + path).openConnection() as HttpURLConnection
+            c.requestMethod = method
+            c.connectTimeout = 5000
+            c.readTimeout = 8000
+            c.setRequestProperty("User-Agent", "rweb-browser")
+            prefs.getString("comm_token", null)?.let { c.setRequestProperty("Authorization", "Bearer " + it) }
+            if (body != null) {
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", "application/json")
+                c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            }
+            try {
+                val code = c.responseCode
+                val stream = if (code in 200..299) c.inputStream else c.errorStream
+                val text = stream?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
+                ApiResult(code, try { JSONObject(text) } catch (e: Exception) { null })
+            } finally {
+                c.disconnect()
+            }
+        } catch (e: Exception) {
+            ApiResult(0, null)
+        }
+    }
+
+    private fun jsonStr(j: JSONObject, key: String): String? = if (j.isNull(key)) null else j.optString(key).ifEmpty { null }
+
+    private fun dropCommToken() {
+        prefs.edit().remove("comm_token").remove("comm_user").apply()
+    }
+
+    private fun ago(ts: Long): String {
+        val s = System.currentTimeMillis() / 1000 - ts
+        return when {
+            s < 60 -> "now"
+            s < 3600 -> (s / 60).toString() + "m"
+            s < 86400 -> (s / 3600).toString() + "h"
+            else -> (s / 86400).toString() + "d"
+        }
+    }
+
+    private fun commMsgHtml(msg: String): String = "<div class=\"cb\">" + esc(msg) + "</div>"
+
+    private fun commNoServerHtml(): String =
+        "<div class=\"cb\"><b>Community</b><br>Posts live on your own rweb server. <a href=\"rweb://c/setup\" style=\"color:var(--acc)\">Set up your server</a></div>"
+
+    private fun commHeader(me: String?, withTabs: Boolean): String {
+        val sb = StringBuilder()
+        sb.append("<div class=\"ch\"><b style=\"font-size:15px;color:var(--fg)\">Community</b><span>")
+        if (me != null) {
+            sb.append(esc(me)).append("@abigweb \u00B7 <a href=\"rweb://c/logout\" style=\"color:var(--acc)\">Log out</a>")
+        } else {
+            sb.append("<a href=\"rweb://c/login\" style=\"color:var(--acc)\">Log in / Sign up</a>")
+        }
+        sb.append("</span></div>")
+        if (withTabs) {
+            sb.append("<div class=\"ctabs\"><a class=\"cta").append(if (commTab == "global") " on" else "").append("\" href=\"rweb://c/tab?t=global\">Global</a>")
+            sb.append("<a class=\"cta").append(if (commTab == "following") " on" else "").append("\" href=\"rweb://c/tab?t=following\">Following</a></div>")
+            if (me != null) {
+                sb.append("<div class=\"cb cc\"><textarea id=\"cx\" rows=\"2\" maxlength=\"").append(COMM_MAX)
+                sb.append("\" placeholder=\"What's happening? (").append(COMM_MAX).append(" characters)\" oninput=\"cnt()\"></textarea>")
+                sb.append("<input id=\"cu\" placeholder=\"Link (optional)\" style=\"margin-top:8px;padding:10px 16px;font-size:14px\">")
+                sb.append("<div class=\"ch\" style=\"margin:8px 0 0\"><span id=\"cn\">").append(COMM_MAX)
+                sb.append("</span><a class=\"cf on\" href=\"#\" onclick=\"return cpost()\">Post</a></div></div>")
+            }
+        }
+        return sb.toString()
+    }
+
+    /** One post. Everything from the server is escaped; links are only shown if they are http(s). */
+    private fun commPostHtml(o: JSONObject, me: String?, inThread: Boolean): String {
+        val id = o.optLong("id")
+        val user = o.optString("user")
+        val mine = o.optBoolean("mine")
+        val text = o.optString("text")
+        val url = o.optString("url")
+        val replies = o.optInt("replies")
+        val sb = StringBuilder()
+        sb.append("<div class=\"cb\"><div class=\"ch\"><span><span class=\"cu\">").append(esc(user)).append("@abigweb</span> \u00B7 ")
+        sb.append(ago(o.optLong("time"))).append("</span>")
+        if (me != null && !mine) {
+            val on = o.optBoolean("following")
+            sb.append("<a class=\"cf").append(if (on) " on" else "").append("\" href=\"rweb://c/follow?u=").append(Uri.encode(user))
+            sb.append("&on=").append(if (on) "0" else "1").append("\">").append(if (on) "Following" else "+ Follow").append("</a>")
+        }
+        sb.append("</div>")
+        if (text.isNotEmpty()) sb.append("<div class=\"ct\">").append(esc(text)).append("</div>")
+        if (isHttp(url)) sb.append("<a class=\"cl\" href=\"").append(esc(url)).append("\">").append(esc(url)).append("</a>")
+        sb.append("<div class=\"ca\"><a href=\"rweb://c/reply?id=").append(id).append("\">Reply</a>")
+        if (!inThread && replies > 0) {
+            sb.append("<a href=\"rweb://c/thread?id=").append(id).append("\">").append(replies).append(if (replies == 1) " reply" else " replies").append("</a>")
+        }
+        if (mine) {
+            sb.append("<a href=\"rweb://c/delete?id=").append(id).append("\">Delete</a>")
+        } else if (me != null) {
+            sb.append("<a href=\"rweb://c/report?id=").append(id).append("\">Report</a>")
+        }
+        sb.append("</div></div>")
+        return sb.toString()
+    }
+
+    /** Fetches the feed (or an open thread) and returns the section's HTML. Runs on a background thread. */
+    private fun buildCommunity(): String {
+        val hadToken = prefs.getString("comm_token", null) != null
+        val thread = commThread
+        if (thread != 0L) {
+            val r = commCall("GET", "/c/thread?id=" + thread)
+            val j = r.json ?: return commMsgHtml("Can't reach your rweb server.")
+            if (r.code != 200) {
+                commThread = 0L
+                return commMsgHtml(j.optString("error", "Post not found."))
+            }
+            val me = jsonStr(j, "me")
+            if (hadToken && me == null) dropCommToken()
+            val sb = StringBuilder(commHeader(me, false))
+            sb.append("<div class=\"ctabs\"><a class=\"cta\" href=\"rweb://c/tab?t=").append(commTab).append("\">\u2039 Back</a></div>")
+            sb.append(commPostHtml(j.getJSONObject("root"), me, true))
+            val arr = j.getJSONArray("replies")
+            for (i in 0 until arr.length()) sb.append(commPostHtml(arr.getJSONObject(i), me, true))
+            return sb.toString()
+        }
+        if (commTab == "following" && !hadToken) {
+            return commHeader(null, true) + commMsgHtml("Log in to see posts from people you follow.")
+        }
+        val r = commCall("GET", "/c/feed?tab=" + commTab + "&limit=20")
+        val j = r.json ?: return commMsgHtml("Can't reach your rweb server.")
+        if (r.code == 401) {
+            dropCommToken()
+            commTab = "global"
+            return commHeader(null, true) + commMsgHtml("Please log in again.")
+        }
+        if (r.code != 200) return commMsgHtml(j.optString("error", "Something went wrong."))
+        val me = jsonStr(j, "me")
+        if (hadToken && me == null) dropCommToken() // the session expired
+        val sb = StringBuilder(commHeader(me, true))
+        val arr = j.getJSONArray("posts")
+        if (arr.length() == 0) {
+            sb.append(commMsgHtml(if (commTab == "following") "Nothing yet. Follow people from the Global tab." else "No posts yet. Be the first!"))
+        }
+        for (i in 0 until arr.length()) sb.append(commPostHtml(arr.getJSONObject(i), me, false))
+        return sb.toString()
+    }
+
+    private fun injectComm(web: WebView, html: String) {
+        web.evaluateJavascript(
+            "(function(){var e=document.getElementById('comm');if(e){e.innerHTML=" + JSONObject.quote(html) + ";}})()",
+            null
+        )
+    }
+
+    private fun setComm(html: String) {
+        commHtml = html
+        for (t in tabs) {
+            if (!t.priv && t.url.isEmpty()) injectComm(t.web, html)
+        }
+    }
+
+    private fun refreshCommunity() {
+        if (serverApiBase() == null) {
+            setComm(commNoServerHtml())
+            return
+        }
+        Thread {
+            val html = try {
+                buildCommunity()
+            } catch (e: Exception) {
+                commMsgHtml("Can't reach your rweb server.")
+            }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) setComm(html)
+            }
+        }.start()
+    }
+
+    private fun apiError(r: ApiResult): String =
+        r.json?.optString("error")?.takeIf { it.isNotEmpty() } ?: "Can't reach your rweb server"
+
+    /** A POST that changes something (follow, delete, report), then refreshes the feed. */
+    private fun commAction(path: String, body: JSONObject, okMsg: String?) {
+        Thread {
+            val r = commCall("POST", path, body)
+            runOnUiThread {
+                if (r.code in 200..299) {
+                    if (okMsg != null) toast(okMsg)
+                } else if (r.code == 401) {
+                    dropCommToken()
+                    toast("Please log in again")
+                } else {
+                    toast(apiError(r))
+                }
+            }
+            refreshCommunity()
+        }.start()
+    }
+
+    private fun sendPost(textIn: String, urlIn: String, replyTo: Long?) {
+        val text = textIn.trim()
+        var url = urlIn.trim()
+        if (prefs.getString("comm_token", null) == null) {
+            showCommunityLogin()
+            return
+        }
+        if (text.isEmpty() && url.isEmpty()) {
+            toast("Write something or add a link")
+            return
+        }
+        if (text.codePointCount(0, text.length) > COMM_MAX) {
+            toast("Posts are at most " + COMM_MAX + " characters")
+            return
+        }
+        if (url.isNotEmpty() && !isHttp(url)) url = "https://" + url
+        val body = JSONObject().put("text", text).put("url", url)
+        if (replyTo != null) body.put("reply_to", replyTo)
+        Thread {
+            val r = commCall("POST", "/c/post", body)
+            runOnUiThread {
+                if (r.code in 200..299) {
+                    toast(if (replyTo != null) "Reply posted" else "Posted")
+                } else if (r.code == 401) {
+                    dropCommToken()
+                    toast("Please log in again")
+                } else {
+                    toast(apiError(r))
+                }
+            }
+            refreshCommunity()
+        }.start()
+    }
+
+    private fun showReplyDialog(postId: Long) {
+        if (prefs.getString("comm_token", null) == null) {
+            showCommunityLogin()
+            return
+        }
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(20), dp(10), dp(20), dp(4))
+        val text = EditText(this)
+        text.hint = "Your reply"
+        text.filters = arrayOf<InputFilter>(InputFilter.LengthFilter(COMM_MAX))
+        text.minLines = 3
+        text.gravity = Gravity.TOP
+        val counter = TextView(this)
+        counter.text = COMM_MAX.toString()
+        counter.gravity = Gravity.END
+        text.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                counter.text = (COMM_MAX - (s?.length ?: 0)).toString()
+            }
+        })
+        val link = EditText(this)
+        link.hint = "Link (optional)"
+        link.setSingleLine()
+        link.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        box.addView(text)
+        box.addView(counter)
+        box.addView(link)
+        dlg()
+            .setTitle("Reply")
+            .setView(box)
+            .setPositiveButton("Reply") { _, _ -> sendPost(text.text.toString(), link.text.toString(), postId) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showCommunityLogin() {
+        if (serverApiBase() == null) {
+            askRwebServer()
+            return
+        }
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(20), dp(10), dp(20), dp(4))
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        val name = EditText(this)
+        name.hint = "username"
+        name.setSingleLine()
+        name.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        row.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val suffix = TextView(this)
+        suffix.text = "@abigweb"
+        suffix.setPadding(dp(6), 0, 0, 0)
+        row.addView(suffix)
+        val pw = EditText(this)
+        pw.hint = "password (6+ characters)"
+        pw.setSingleLine()
+        pw.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        box.addView(row)
+        box.addView(pw)
+        dlg()
+            .setTitle("Community")
+            .setView(box)
+            .setPositiveButton("Log in") { _, _ -> commAuth("login", name.text.toString(), pw.text.toString()) }
+            .setNeutralButton("Create account") { _, _ -> commAuth("register", name.text.toString(), pw.text.toString()) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun commAuth(kind: String, user: String, password: String) {
+        Thread {
+            val r = commCall("POST", "/c/" + kind, JSONObject().put("user", user).put("password", password))
+            runOnUiThread {
+                val j = r.json
+                val token = if (j != null) jsonStr(j, "token") else null
+                val who = if (j != null) jsonStr(j, "user") else null
+                if (r.code in 200..299 && token != null && who != null) {
+                    prefs.edit().putString("comm_token", token).putString("comm_user", who).apply()
+                    toast("Signed in as " + who + "@abigweb")
+                    refreshCommunity()
+                } else {
+                    toast(apiError(r))
+                }
+            }
+        }.start()
+    }
+
+    /** rweb://c/<action>?... links from the Community block on the start page. */
+    private fun handleCommunity(tab: Tab, u: Uri) {
+        when (u.lastPathSegment) {
+            "tab" -> {
+                commTab = if (u.getQueryParameter("t") == "following") "following" else "global"
+                commThread = 0L
+                refreshCommunity()
+            }
+            "thread" -> {
+                commThread = u.getQueryParameter("id")?.toLongOrNull() ?: 0L
+                refreshCommunity()
+            }
+            "post" -> sendPost(u.getQueryParameter("text") ?: "", u.getQueryParameter("url") ?: "", null)
+            "reply" -> u.getQueryParameter("id")?.toLongOrNull()?.let { showReplyDialog(it) }
+            "follow" -> {
+                val name = u.getQueryParameter("u") ?: return
+                commAction(if (u.getQueryParameter("on") == "1") "/c/follow" else "/c/unfollow", JSONObject().put("user", name), null)
+            }
+            "delete" -> u.getQueryParameter("id")?.toLongOrNull()?.let { id ->
+                dlg()
+                    .setTitle("Delete this post?")
+                    .setMessage("Its replies are deleted too.")
+                    .setPositiveButton("Delete") { _, _ ->
+                        if (commThread == id) commThread = 0L
+                        commAction("/c/delete", JSONObject().put("id", id), "Deleted")
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+            "report" -> u.getQueryParameter("id")?.toLongOrNull()?.let {
+                commAction("/c/report", JSONObject().put("id", it).put("reason", "reported from the app"), "Thanks, reported")
+            }
+            "login" -> showCommunityLogin()
+            "logout" -> {
+                Thread { commCall("POST", "/c/logout", JSONObject()) }.start()
+                dropCommToken()
+                commThread = 0L
+                refreshCommunity()
+            }
+            "setup" -> askRwebServer()
+        }
+    }
+
     private val SHEET = Color.parseColor("#2A0710")
 
     private fun dlg(): AlertDialog.Builder =
@@ -3834,6 +4214,7 @@ class MainActivity : ComponentActivity() {
         GeolocationPermissions.getInstance().clearAll()
         saveList("history", emptyList())
         localSearch.clear()
+        dropCommToken()
         toast("Browsing data cleared")
     }
 }
