@@ -162,10 +162,6 @@ class MainActivity : ComponentActivity() {
 
     private val linkTitles = ConcurrentHashMap<String, String>()
 
-    private lateinit var localSearch: LocalSearch
-    private val crawler: LocalCrawler by lazy { LocalCrawler(localSearch) }
-    @Volatile private var crawlStatus = ""
-
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshIntervalMs = 15 * 60 * 1000L
 
@@ -266,158 +262,20 @@ class MainActivity : ComponentActivity() {
         Pair("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
         Pair("Times of India", "https://timesofindia.indiatimes.com/rssfeedstopstories.cms"),
         Pair("The Hindu", "https://www.thehindu.com/news/national/feeder/default.rss"),
-        Pair("NPR", "https://feeds.npr.org/1001/rss.xml"),
-        Pair("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml"),
-        Pair("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
-        Pair("Fox News", "https://moxie.foxnews.com/feedburner/latest.xml"),
-        Pair("Washington Post", "https://feeds.washingtonpost.com/rss/world"),
-        Pair("Wall Street Journal", "https://feeds.a.dj.com/rss/RSSWorldNews.xml"),
-        Pair("USA Today", "https://rssfeeds.usatoday.com/usatoday-NewsTopStories"),
-        Pair("Sky News", "https://feeds.skynews.com/feeds/rss/home.xml"),
-        Pair("NBC News", "https://feeds.nbcnews.com/nbcnews/public/news"),
-        Pair("BBC Technology", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
-        Pair("TechCrunch", "https://techcrunch.com/feed/"),
-        Pair("The Verge", "https://www.theverge.com/rss/index.xml"),
-        Pair("Wired", "https://www.wired.com/feed/rss"),
-        Pair("Ars Technica", "https://arstechnica.com/feed/"),
-        Pair("Engadget", "https://www.engadget.com/rss.xml"),
-        Pair("CNET", "https://www.cnet.com/rss/all/"),
-        Pair("Mashable", "https://mashable.com/feed.rss"),
-        Pair("VentureBeat", "https://venturebeat.com/feed/"),
-        Pair("Gizmodo", "https://gizmodo.com/rss"),
-        Pair("Bloomberg", "https://feeds.bloomberg.com/markets/news.rss"),
-        Pair("Financial Times", "https://www.ft.com/rss/home"),
-        Pair("Forbes", "https://www.forbes.com/real-time/feed2/"),
-        Pair("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
-        Pair("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
-        Pair("ESPN", "https://www.espn.com/espn/rss/news"),
-        Pair("BBC Sport", "https://feeds.bbci.co.uk/sport/rss.xml"),
-        Pair("Sky Sports", "https://www.skysports.com/rss/12040"),
-        Pair("Variety", "https://variety.com/feed/"),
-        Pair("Hollywood Reporter", "https://www.hollywoodreporter.com/feed/"),
-        Pair("Rolling Stone", "https://www.rollingstone.com/feed/"),
-        Pair("Billboard", "https://www.billboard.com/feed/"),
-        Pair("E! Online", "https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml"),
-        Pair("Nature", "https://www.nature.com/nature.rss"),
-        Pair("ScienceDaily", "https://www.sciencedaily.com/rss/top.xml"),
-        Pair("National Geographic", "https://www.nationalgeographic.com/pages/topic/index.rss"),
-        Pair("Space.com", "https://www.space.com/feeds/all"),
-        Pair("Live Science", "https://www.livescience.com/feeds/all"),
-        Pair("Politico", "https://politico.com/rss/politicopulse.xml"),
-        Pair("The Hill", "https://thehill.com/rss/syndication/1"),
-        Pair("Axios", "https://api.axios.com/feed/"),
-        Pair("BBC Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
-        Pair("CBC News", "https://www.cbc.ca/webfeed/rss/rss-topstories")
+        Pair("NPR", "https://feeds.npr.org/1001/rss.xml")
     )
 
     private val topVideoFeeds = listOf(
         Pair("BBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA"),
         Pair("CNN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCupvZG-5ko_eiXAupbDfxWw"),
         Pair("Al Jazeera English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg"),
-        Pair("NBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg"),
-        Pair("ABC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q"),
-        Pair("CBS News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC8p1vwvWtl6T73JiExfWs1g"),
-        Pair("MSNBC", "https://www.youtube.com/feeds/videos.xml?channel_id=UCaXkIU1QidjPwiAYu6GcHjg"),
-        Pair("Sky News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCoMdktPbSTixAyNGwb-UYkQ"),
-        Pair("Fox News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXIJgqnII2ZOINSWNOGFThA"),
-        Pair("DW News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg"),
-        Pair("France 24 English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCQfwfsi5VrQ8yKZ-UWmAEFg"),
-        Pair("Reuters", "https://www.youtube.com/feeds/videos.xml?channel_id=UChqUTb7kYRX8-EiaN3XFrSQ"),
-        Pair("Associated Press", "https://www.youtube.com/feeds/videos.xml?channel_id=UC52X5wxOL_s5yw0dQk7NtgA"),
-        Pair("Bloomberg", "https://www.youtube.com/feeds/videos.xml?channel_id=UCUMZ7gohGI9HcU9VNsr2FJQ"),
-        Pair("CNBC", "https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA"),
-        Pair("The Guardian", "https://www.youtube.com/feeds/videos.xml?channel_id=UCHpw8xwDNhU9gdohEcJu4aA"),
-        Pair("New York Times", "https://www.youtube.com/feeds/videos.xml?channel_id=UCqnbDFdCpuN8CMEg0VuEBqA"),
-        Pair("Washington Post", "https://www.youtube.com/feeds/videos.xml?channel_id=UCHd62-u_v4DvJ8TCFtpi4GA"),
-        Pair("Wall Street Journal", "https://www.youtube.com/feeds/videos.xml?channel_id=UCK7tptUDHh-RYDsdxO1-5QQ"),
-        Pair("The Economist", "https://www.youtube.com/feeds/videos.xml?channel_id=UC0p5jTq6Xx_DosDFxVXnWaQ"),
-        Pair("Financial Times", "https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw"),
-        Pair("USA TODAY", "https://www.youtube.com/feeds/videos.xml?channel_id=UCP6HGa63sBC7-KHtkme-p-g"),
-        Pair("TIME", "https://www.youtube.com/feeds/videos.xml?channel_id=UC8Su5vZCXWRag13H53zWVwA"),
-        Pair("Newsweek", "https://www.youtube.com/feeds/videos.xml?channel_id=UC2a35q7eyzkfoIusBzdH4Hw"),
-        Pair("VICE News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCZaT_X_mc0BI-djXOlfhqWQ"),
-        Pair("Vox", "https://www.youtube.com/feeds/videos.xml?channel_id=UCLXo7UDZvByw2ixzpQCufnA"),
-        Pair("POLITICO", "https://www.youtube.com/feeds/videos.xml?channel_id=UCgjtvMmHXbutALaw9XzRkAg"),
-        Pair("CBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCuFFtHWoLl5fauMMD5Ww2jA"),
-        Pair("Global News", "https://www.youtube.com/feeds/videos.xml?channel_id=UChLtXXpo4Ge1ReTEboVvTDg"),
-        Pair("CTV News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCi7Zk9baY1tv03gL6n12p-w"),
-        Pair("ABC News Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UCVgO39Bk5sMo66-6o6Spn6Q"),
-        Pair("7NEWS Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UC5T7D-Dh1eDGtsAFCuwv_Sw"),
-        Pair("9 News Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UCIYLOcEUX6TbBo7HQVF2PKA"),
-        Pair("Sky News Australia", "https://www.youtube.com/feeds/videos.xml?channel_id=UCO0akufu9MOzyz3nvGIXAAw"),
-        Pair("NDTV", "https://www.youtube.com/feeds/videos.xml?channel_id=UCZFMm1mMw0F81Z37aaEzTUA"),
-        Pair("India Today", "https://www.youtube.com/feeds/videos.xml?channel_id=UCYPvAwZP8pZhSMW8qs7cVCw"),
-        Pair("WION", "https://www.youtube.com/feeds/videos.xml?channel_id=UC_gUM8rL-Lrg6O3adPW9K1g"),
-        Pair("Firstpost", "https://www.youtube.com/feeds/videos.xml?channel_id=UCz8QaiQxApLq8sLNcszYyJw"),
-        Pair("Times Now", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6RJ7-PaXg6TIH2BzZfTV7w"),
-        Pair("Republic World", "https://www.youtube.com/feeds/videos.xml?channel_id=UCwqusr8YDwM-3mEYTDeJHzw"),
-        Pair("CNN-News18", "https://www.youtube.com/feeds/videos.xml?channel_id=UCef1-8eOpJgud7szVPlZQAQ"),
-        Pair("ANI News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCtFQDgA8J8_iiwc5-KoAQlg"),
-        Pair("DD India", "https://www.youtube.com/feeds/videos.xml?channel_id=UCGDQNvybfDDeGTf4GtigXaw"),
-        Pair("Aaj Tak", "https://www.youtube.com/feeds/videos.xml?channel_id=UCt4t-jeY85JegMlZ-E5UWtA"),
-        Pair("ABP News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCRWFSbif-RFENbBrSiez1DA"),
-        Pair("IndiaTV", "https://www.youtube.com/feeds/videos.xml?channel_id=UCttspZesZIDEwwpVIgoZtWQ"),
-        Pair("Zee News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCIvaYmXn910QMdemBG3v1pQ"),
-        Pair("News18 India", "https://www.youtube.com/feeds/videos.xml?channel_id=UCPP3etACgdUWvizcES1dJ8Q"),
-        Pair("The Lallantop", "https://www.youtube.com/feeds/videos.xml?channel_id=UCx8Z14PpntdaxCt2hakbQLQ"),
-        Pair("NDTV India", "https://www.youtube.com/feeds/videos.xml?channel_id=UC9CYT9gSNLevX5ey2_6CK0Q"),
-        Pair("TRT World", "https://www.youtube.com/feeds/videos.xml?channel_id=UC7fWeaHhqgM4Ry-RMpM2YYw"),
-        Pair("CNA", "https://www.youtube.com/feeds/videos.xml?channel_id=UC83jt4dlz1Gjl58fzQrrKZg"),
-        Pair("South China Morning Post", "https://www.youtube.com/feeds/videos.xml?channel_id=UC4SUWiuTj6fnrkEhWCN40gw"),
-        Pair("NHK WORLD-JAPAN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCSPEjw8F2nQDtmUKPFNF7_A"),
-        Pair("Arirang News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCzznO4xSV8BKnUBPyswtCUw"),
-        Pair("KBS World News", "https://www.youtube.com/feeds/videos.xml?channel_id=UC5BMQOsAB8hKUyHu9KI6yig"),
-        Pair("Euronews", "https://www.youtube.com/feeds/videos.xml?channel_id=UCSrZ3UV4jOidv8ppoVuvW9Q"),
-        Pair("i24NEWS English", "https://www.youtube.com/feeds/videos.xml?channel_id=UCvHDpsWKADrDia0c99X37vg"),
-        Pair("Channel 4 News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCTrQ7HXWRRxr76OsehR_2rg"),
-        Pair("ITV News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCFQgi22MaCa4E4YNJUWOPGg"),
-        Pair("The Telegraph", "https://www.youtube.com/feeds/videos.xml?channel_id=UCPgLNge0xqQHWM5B5EFH9Cg"),
-        Pair("The Independent", "https://www.youtube.com/feeds/videos.xml?channel_id=UCshwRhftAwXZ8wTf73_60lA"),
-        Pair("GBNews", "https://www.youtube.com/feeds/videos.xml?channel_id=UC05b5M9K9K-V2O69b8V3b-Q"),
-        Pair("60 Minutes", "https://www.youtube.com/feeds/videos.xml?channel_id=UCsN32BtMd0IoByjJRNF12cw"),
-        Pair("CBS Mornings", "https://www.youtube.com/feeds/videos.xml?channel_id=UC-SJ6nODDmufqBzPBwCvYvQ"),
-        Pair("CBS Sunday Morning", "https://www.youtube.com/feeds/videos.xml?channel_id=UCVT1tPkR-fUVlO652EcO3ow"),
-        Pair("TODAY", "https://www.youtube.com/feeds/videos.xml?channel_id=UChDKyKQ59fYz3JO2fl0Z6sg"),
-        Pair("Good Morning America", "https://www.youtube.com/feeds/videos.xml?channel_id=UCH1oRy1dINbMVp3UFWrKP0w"),
-        Pair("PBS NewsHour", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ"),
-        Pair("FRONTLINE PBS", "https://www.youtube.com/feeds/videos.xml?channel_id=UC3ScyryU9rc9sezkjpLD9Tg"),
-        Pair("The Verge", "https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ"),
-        Pair("TechCrunch", "https://www.youtube.com/feeds/videos.xml?channel_id=UCCjyq_K1Xwfg8Lndy7lKMpA"),
-        Pair("CNET", "https://www.youtube.com/feeds/videos.xml?channel_id=UCOmcA3f_RrH6b9NmcNa4tdg"),
-        Pair("WIRED", "https://www.youtube.com/feeds/videos.xml?channel_id=UCftwRNsjfRo08xYE31tkiyw"),
-        Pair("Engadget", "https://www.youtube.com/feeds/videos.xml?channel_id=UC-6012p_083P3w6mR127bSg"),
-        Pair("Mashable", "https://www.youtube.com/feeds/videos.xml?channel_id=UC33_tB18qR26iR18vM90t_Q"),
-        Pair("MIT Technology Review", "https://www.youtube.com/feeds/videos.xml?channel_id=UCgy4Mf_tlZGqesYNqPNxjPw"),
-        Pair("Bloomberg Television", "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg"),
-        Pair("Bloomberg Technology", "https://www.youtube.com/feeds/videos.xml?channel_id=UCrM7B7SL_g1edFOnmj-SDKg"),
-        Pair("Yahoo Finance", "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg"),
-        Pair("Forbes", "https://www.youtube.com/feeds/videos.xml?channel_id=UCmh7afjfKQMeY69261o2w8Q"),
-        Pair("Fortune Magazine", "https://www.youtube.com/feeds/videos.xml?channel_id=UCP2gdh7HfjgCoi8lO50dA5w"),
-        Pair("Business Insider", "https://www.youtube.com/feeds/videos.xml?channel_id=UCcyq283he07B7_KUX07mmtA"),
-        Pair("ESPN", "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg"),
-        Pair("Sky Sports News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCNAf1k0yIjyGu3k9BwAg3lg"),
-        Pair("CBS Sports", "https://www.youtube.com/feeds/videos.xml?channel_id=UCET00YnetHT7tOpu12v8jxg"),
-        Pair("NBC Sports", "https://www.youtube.com/feeds/videos.xml?channel_id=UCqZQlzSHbVJrwrn5XvzrzcA"),
-        Pair("FOX Sports", "https://www.youtube.com/feeds/videos.xml?channel_id=UCw05gJBvjg92964tL0M6xXw"),
-        Pair("Variety", "https://www.youtube.com/feeds/videos.xml?channel_id=UCgRQHK8T60w-1yV6iW91p2w"),
-        Pair("The Hollywood Reporter", "https://www.youtube.com/feeds/videos.xml?channel_id=UCZ8Sxmkweh65HetaZfR8YuA"),
-        Pair("Entertainment Tonight", "https://www.youtube.com/feeds/videos.xml?channel_id=UCdtXPiqI2cLorKaPrfpKc4g"),
-        Pair("Access Hollywood", "https://www.youtube.com/feeds/videos.xml?channel_id=UCiKGMZZmSjG-9GJ22_2_52g"),
-        Pair("E! News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCjDsbbzHnTrXk4_26-85P9A"),
-        Pair("National Geographic", "https://www.youtube.com/feeds/videos.xml?channel_id=UCpVm7bg6pXKo1Pr6k5kxG9A"),
-        Pair("NASA", "https://www.youtube.com/feeds/videos.xml?channel_id=UCLA_DiR1FfKNvjuUpBHmylQ"),
-        Pair("Smithsonian Channel", "https://www.youtube.com/feeds/videos.xml?channel_id=UC-266w47B78-p-4G8wP6kCg"),
-        Pair("Discovery", "https://www.youtube.com/feeds/videos.xml?channel_id=UCqOoboPm3uhY_YXhvhmL-WA"),
-        Pair("New Scientist", "https://www.youtube.com/feeds/videos.xml?channel_id=UC3-R2B9177M-X0S_w1o1Z3w"),
-        Pair("Seeker", "https://www.youtube.com/feeds/videos.xml?channel_id=UCzWQYUVCpZqtN93H8RR44Qw"),
-        Pair("Vox Borders", "https://www.youtube.com/feeds/videos.xml?channel_id=UC6107grRI4m0o2-emgoDnAA")
+        Pair("NBC News", "https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg")
     )
 
     private val baseEngines = listOf(
         Pair("Google", "https://www.google.com/search?q="),
         Pair("DuckDuckGo", "https://duckduckgo.com/?q="),
-        Pair("Bing", "https://www.bing.com/search?q="),
-        Pair("rweb Search", "rweb://search?q=")
+        Pair("Bing", "https://www.bing.com/search?q=")
     )
 
     companion object {
@@ -426,7 +284,7 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}.lf{margin-top:14px}.lf input{border:2px solid var(--acc);box-shadow:none}#comm{width:100%;max-width:520px;margin-top:24px}.cb{background:var(--card);border-radius:18px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--sh)}.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;color:var(--mute)}.cu{font-weight:700;color:var(--acc)}.ct{white-space:pre-wrap;word-wrap:break-word;font-size:15px}.cl{display:block;margin-top:6px;font-size:13px;color:var(--acc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ca{display:flex;gap:16px;margin-top:8px;font-size:13px}.ca a{color:var(--mute);text-decoration:none}.cf{padding:4px 12px;border-radius:14px;background:var(--fld);color:var(--fg);font-size:12px;text-decoration:none}.cf.on{background:var(--acc);color:#fff}.ctabs{display:flex;gap:8px;margin:6px 0 10px}.cta{padding:6px 16px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;text-decoration:none}.cta.on{background:var(--acc);color:#fff}.cc textarea{width:100%;box-sizing:border-box;border:0;border-radius:14px;padding:12px;background:var(--fld);color:var(--fg);font-size:15px;font-family:inherit;resize:none;outline:none}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
+        const val HEAD_A = """<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}body{margin:0;padding:28px 16px;box-sizing:border-box;background:var(--bg);color:var(--fg);font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}.logo-container{display:flex;align-items:center;justify-content:center;width:72px;height:72px;margin-bottom:16px;border-radius:50%;background:var(--fld);box-shadow:var(--sh)}.logo-container svg{width:40px;height:40px}h1{color:var(--acc);font-size:38px;margin:0 0 24px}form{width:100%;max-width:520px}input{width:100%;box-sizing:border-box;padding:16px 22px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 16px;margin-top:32px;width:100%;max-width:520px}.tile{width:72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px}.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}.ic img{position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;padding:13px;background:#FFFFFF;object-fit:contain}#news{width:100%;max-width:520px;margin-top:24px}.nh{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}summary.nh{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px;margin:0}summary.nh::-webkit-details-marker{display:none}summary.nh::after{content:"\25BE";font-size:14px}details[open] summary.nh::after{content:"\25B4"}.nw{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px;background:var(--card);border-radius:18px;box-shadow:var(--sh);color:var(--fg);text-decoration:none;font-size:14px;line-height:1.4}.nt{flex:1}.ni{width:88px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0}#vids{width:100%;max-width:520px;margin-top:32px}.nw.hero{flex-direction:column;align-items:stretch;padding:0;overflow:hidden}.nw.hero .hi{width:100%;height:190px;object-fit:cover;display:block}.nw.hero .nt{padding:14px 16px;font-size:16px;font-weight:600}.vrow{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}.vc{flex:0 0 230px;text-decoration:none;color:var(--fg)}.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}.vt img{width:100%;height:100%;object-fit:cover;display:block}.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}.vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}.chip{padding:7px 14px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh)}.chip.on{background:var(--acc);color:#fff}#comm{width:100%;max-width:520px;margin-top:24px}.cb{background:var(--card);border-radius:18px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--sh)}.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;color:var(--mute)}.cu{font-weight:700;color:var(--acc)}.ct{white-space:pre-wrap;word-wrap:break-word;font-size:15px}.cl{display:block;margin-top:6px;font-size:13px;color:var(--acc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ca{display:flex;gap:16px;margin-top:8px;font-size:13px}.ca a{color:var(--mute);text-decoration:none}.cf{padding:4px 12px;border-radius:14px;background:var(--fld);color:var(--fg);font-size:12px;text-decoration:none}.cf.on{background:var(--acc);color:#fff}.ctabs{display:flex;gap:8px;margin:6px 0 10px}.cta{padding:6px 16px;border-radius:16px;background:var(--fld);color:var(--fg);font-size:13px;text-decoration:none}.cta.on{background:var(--acc);color:#fff}.cc textarea{width:100%;box-sizing:border-box;border:0;border-radius:14px;padding:12px;background:var(--fld);color:var(--fg);font-size:15px;font-family:inherit;resize:none;outline:none}</style></head><body><div class="logo-container"><svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h1>rweb</h1><form action=""""
 
         const val HEAD_B = """" method="get" onsubmit="return go()"><input id="q" name="q" placeholder="Search the web" autocomplete="off"></form><div class="chips"><span class="chip on" id="c-web" onclick="pick('web')">Web</span><span class="chip" id="c-img" onclick="pick('img')">Images</span><span class="chip" id="c-vid" onclick="pick('vid')">Videos</span><span class="chip" onclick="location.href='rweb://voice'">Voice</span><span class="chip" onclick="location.href='rweb://photo'">Photo</span></div><div class="grid">"""
     }
@@ -434,7 +292,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
-        localSearch = LocalSearch(this)
         loadAdBlockSettings()
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
@@ -917,10 +774,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun navigate(tab: Tab, target: String) {
-        if (target.startsWith("rweb://search")) {
-            runLocalSearch(tab, Uri.parse(target).getQueryParameter("q") ?: "")
-            return
-        }
         val up = upgradeHttps(target)
         tab.httpFallback = if (up != target) target else null
         tab.web.loadUrl(up)
@@ -981,7 +834,6 @@ class MainActivity : ComponentActivity() {
         web.loadDataWithBaseURL(null, startHtml(), "text/html", "utf-8", null)
         refreshVideos()
         refreshNews()
-        refreshCommunity()
     }
 
     private fun thirdPartyCookies(): Boolean = prefs.getBoolean("tpc", true)
@@ -1306,12 +1158,10 @@ class MainActivity : ComponentActivity() {
                         addHistory(tab.title, tab.url)
                         tab.lastHistoryUrl = tab.url
                     }
-                    if (!tab.priv && indexVisited() && tab.url.startsWith("http")) indexCurrentPage(view, tab.url)
                 } else {
                     tab.title = "New tab"
                     if (!tab.priv) vidHtml?.let { injectVideos(tab.web, it) }
                     if (!tab.priv) newsHtml?.let { injectNews(tab.web, it) }
-                    if (!tab.priv) commHtml?.let { injectComm(tab.web, it) }
                 }
                 if (tabs.getOrNull(cur) === tab && !address.hasFocus()) address.setText(tab.url)
             }
@@ -1364,7 +1214,6 @@ class MainActivity : ComponentActivity() {
 
                 if (!tab.priv && tab.url.isEmpty() && req.isForMainFrame && req.hasGesture()) {
                     linkTitles[urlStr]?.let { recordClick(urlStr, it) }
-                    if (isHttp(urlStr)) localSearch.visit(urlStr)
                 }
 
                 if (urlStr.contains("web.whatsapp.com")) {
@@ -1378,10 +1227,7 @@ class MainActivity : ComponentActivity() {
                     when (u.host) {
                         "voice" -> launchVoice()
                         "photo" -> openPhotoSearch()
-                        "search" -> runLocalSearch(tab, u.getQueryParameter("q") ?: "")
                         "home" -> loadStart(tab.web)
-                        "crawl" -> showSearchIndexMenu()
-                        "c" -> handleCommunity(tab, u)
                     }
                     return true
                 }
@@ -1658,8 +1504,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    private fun rwebSearchBase(): String? = prefs.getString("rweb_search_url", null)?.takeIf { it.isNotBlank() }
-
     private fun allEngines(): List<Pair<String, String>> {
         return baseEngines
     }
@@ -1671,49 +1515,15 @@ class MainActivity : ComponentActivity() {
 
     private fun chooseEngine() {
         val list = allEngines()
-        val names = (list.map { it.first } + (if (rwebSearchBase() == null) "Add rweb Search server\u2026" else "Edit rweb Search server\u2026")).toTypedArray()
+        val names = list.map { it.first }.toTypedArray()
         val idx = list.indexOfFirst { it.second == searchBase() }.coerceAtLeast(0)
         dlg()
             .setTitle("Search engine")
             .setSingleChoiceItems(names, idx) { d, i ->
                 d.dismiss()
-                if (i < list.size) {
-                    prefs.edit().putString("search", list[i].second).apply()
-                    toast(names[i])
-                } else {
-                    askRwebServer()
-                }
+                prefs.edit().putString("search", list[i].second).apply()
+                toast(names[i])
             }.show()
-    }
-
-    private fun askRwebServer() {
-        val input = EditText(this)
-        input.setSingleLine()
-        input.hint = "https://search.example.com"
-        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        input.setText(rwebSearchBase()?.substringBefore("/search?q=") ?: "")
-        dlg()
-            .setTitle("rweb Search server")
-            .setMessage("Address of your rwebsearch server. Leave empty to remove it.")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                var v = input.text.toString().trim().trimEnd('/')
-                if (v.isEmpty()) {
-                    prefs.edit().remove("rweb_search_url").apply()
-                    toast("rweb Search removed")
-                } else {
-                    if (!isHttp(v)) v = "https://" + v
-                    if (Uri.parse(v).host == null) {
-                        toast("That address isn't valid")
-                    } else {
-                        val url = v + "/search?q="
-                        prefs.edit().putString("rweb_search_url", url).putString("search", "rweb://search?q=").apply()
-                        toast("rweb Search selected (this phone + your server)")
-                    }
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     private fun esc(s: String): String =
@@ -1743,7 +1553,7 @@ class MainActivity : ComponentActivity() {
         val icons = siteIcons()
         val sb = StringBuilder()
         sb.append(HEAD_A.replaceFirst("<html>", if (isDark()) "<html class=\"dark\">" else "<html>"))
-        sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B.replace("<div class=\"grid\">", localBoxHtml() + "<div class=\"grid\">"))
+        sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B)
         for (t in tiles) {
             val letter = t.first.trim().take(1).uppercase()
             sb.append("<a class=\"tile\" href=\"").append(esc(t.second)).append("\">")
@@ -1760,7 +1570,7 @@ class MainActivity : ComponentActivity() {
             sb.append("</span>")
             sb.append("<span class=\"nm\">").append(esc(t.first.take(14))).append("</span></a>")
         }
-        sb.append("</div><div id=\"comm\">").append(commHtml ?: commMsgHtml("Loading community\u2026")).append("</div><div id=\"vids\">")
+        sb.append("</div><div id=\"vids\">")
         sb.append(vidHtml ?: "<div class=\"nh\">Loading top news videos...</div>")
         sb.append("</div><div id=\"news\">")
         sb.append(newsHtml ?: "<div class=\"nh\">Loading aggregated news...</div>")
@@ -2680,7 +2490,6 @@ class MainActivity : ComponentActivity() {
                 ?.drop(100)
                 ?.forEach { it.delete() }
         } catch (e: Exception) {
-            Log.e("rweb", "trimOfflineCache failed", e)
         }
     }
 
@@ -2692,7 +2501,6 @@ class MainActivity : ComponentActivity() {
                 file.writeText(fullDoc)
                 trimOfflineCache()
             } catch (e: Exception) {
-                Log.e("rweb", "saveOfflineArticle failed for URL: $url", e)
             }
         }
     }
@@ -2816,9 +2624,6 @@ class MainActivity : ComponentActivity() {
             "};var cur='web';function pick(k){cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
             "document.getElementById('q').placeholder=(k==='web')?'Search the web':(k==='img'?'Search images':'Search videos');}" +
             "function go(){var v=document.getElementById('q').value.trim();if(!v){return false;}location.href=B[cur]+encodeURIComponent(v);return false;}" +
-            "function cnt(){var t=document.getElementById('cx'),n=document.getElementById('cn');if(t&&n){n.textContent=200-t.value.length;}}" +
-            "function cpost(){var t=document.getElementById('cx'),u=document.getElementById('cu');var x=t?t.value.trim():'',l=u?u.value.trim():'';if(!x&&!l){return false;}location.href='rweb://c/post?text='+encodeURIComponent(x)+'&url='+encodeURIComponent(l);return false;}" +
-            "function lgo(){var v=document.getElementById('lq');if(!v){return false;}v=v.value.trim();if(!v){return false;}location.href='rweb://search?q='+encodeURIComponent(v);return false;}" +
             "function filterCategory(c){document.querySelectorAll('.nw,.vc').forEach(function(e){e.style.display=(c==='All'||e.getAttribute('data-cat')===c)?'':'none';});}</script>"
     }
 
@@ -3117,658 +2922,6 @@ class MainActivity : ComponentActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun indexVisited(): Boolean = prefs.getBoolean("index_visited", true)
-    private fun wifiOnly(): Boolean = prefs.getBoolean("crawl_wifi", true)
-
-    private val defaultCrawlSeeds = listOf(
-        "https://en.wikipedia.org/wiki/Main_Page",
-        "https://developer.mozilla.org/en-US/",
-        "https://www.bbc.com/news",
-        "https://www.theguardian.com/international",
-        "https://www.nature.com/",
-        "https://www.nasa.gov/"
-    )
-
-    private fun crawlSeeds(): List<String> {
-        val saved = prefs.getString("crawl_seeds", null) ?: return defaultCrawlSeeds
-        return saved.lines().map { it.trim() }.filter { isHttp(it) }
-    }
-
-    private fun localBoxHtml(): String {
-        val n = localSearch.count()
-        val hint = if (n == 0) "Search with rweb (empty index: menu > Search index)" else "Search with rweb \u00B7 " + n + " pages" + (if (serverApiBase() != null) " + your server" else "")
-        return "<form class=\"lf\" onsubmit=\"return lgo()\"><input id=\"lq\" placeholder=\"" + esc(hint) + "\" autocomplete=\"off\"></form>"
-    }
-
-    private val localCss = """
-        :root{--bg:#fff;--fg:#202124;--mute:#5f6368;--card:#f8f9fa;--fld:#f1f3f4;--acc:#c41e3a;--link:#1a0dab}
-        html.dark{--bg:#3a0a14;--fg:#fff1f3;--mute:#e3a9b1;--card:#7a1022;--fld:#7a1022;--acc:#ff6b7d;--link:#ffb3be}
-        *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:sans-serif;line-height:1.45}
-        a{color:var(--link);text-decoration:none}
-        header{display:flex;gap:12px;align-items:center;padding:12px 14px;position:sticky;top:0;background:var(--bg)}
-        .lg{color:var(--acc);font-weight:700;font-size:22px}header form{flex:1;margin:0}
-        input{width:100%;padding:12px 18px;border-radius:26px;border:2px solid var(--acc);background:var(--fld);color:var(--fg);font-size:16px;outline:none}
-        main{padding:4px 16px 40px;max-width:720px;margin:0 auto}.info{color:var(--mute);font-size:13px;margin:6px 0 14px}
-        .r{margin:0 0 20px}.u{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .t{font-size:18px;display:block;margin:2px 0}.s{font-size:14px;word-wrap:break-word}mark{background:none;color:var(--acc);font-weight:600}
-        .web{margin:22px 0 8px}.web a{display:block;padding:12px 16px;border-radius:18px;background:var(--fld);margin-bottom:8px;color:var(--fg)}
-        .top{display:block;padding:14px 16px;border-radius:18px;background:var(--card);margin:0 0 18px;border:2px solid var(--acc);color:var(--fg)}.top b{display:block;font-size:19px;margin:2px 0;color:var(--link)}.tl{color:var(--acc);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}.src{color:var(--acc)}.none{margin-top:36px;text-align:center;color:var(--mute)}.none a{display:inline-block;margin-top:14px;padding:10px 20px;border-radius:20px;background:var(--acc);color:#fff}
-    """
-
-    private class SrcHit(val hit: LocalSearch.Hit, val source: String)
-
-    private fun serverApiBase(): String? = rwebSearchBase()?.substringBefore("/search?q=")?.takeIf { isHttp(it) }
-
-    private fun fetchServerHits(q: String): List<LocalSearch.Hit> {
-        val base = serverApiBase() ?: return emptyList()
-        val out = ArrayList<LocalSearch.Hit>()
-        try {
-            val c = URL(base + "/api/search?n=10&q=" + Uri.encode(q)).openConnection() as HttpURLConnection
-            c.connectTimeout = 4000
-            c.readTimeout = 4000
-            c.setRequestProperty("User-Agent", "rweb-browser")
-            try {
-                if (c.responseCode in 200..299) {
-                    val body = c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-                    val arr = JSONObject(body).getJSONArray("results")
-                    for (i in 0 until arr.length()) {
-                        val o = arr.getJSONObject(i)
-                        out.add(LocalSearch.Hit(o.optString("title"), o.getString("url"), o.optString("snippet")))
-                    }
-                }
-            } finally {
-                c.disconnect()
-            }
-        } catch (e: Exception) {
-        }
-        return out
-    }
-
-    private fun localResultsHtml(q: String, merged: List<SrcHit>, direct: LocalSearch.Hit?, indexSize: Int, serverOn: Boolean): String {
-        val sb = StringBuilder()
-        sb.append("<!doctype html><html").append(if (isDark()) " class=\"dark\"" else "").append("><head><meta charset=\"utf-8\">")
-        sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>").append(localCss).append("</style></head><body>")
-        sb.append("<header><a class=\"lg\" href=\"rweb://home\">rweb</a>")
-        sb.append("<form onsubmit=\"var v=this.q.value.trim();if(v){location.href='rweb://search?q='+encodeURIComponent(v);}return false\">")
-        sb.append("<input name=\"q\" value=\"").append(esc(q)).append("\" autocomplete=\"off\"></form></header><main>")
-
-        if (direct != null) {
-            sb.append("<a class=\"top\" href=\"").append(esc(direct.url)).append("\"><span class=\"tl\">Top result</span><b>")
-            sb.append(esc(direct.title.ifBlank { direct.url })).append("</b><span class=\"u\">").append(esc(direct.url)).append("</span></a>")
-        }
-        val rest = merged.filter { it.hit.url != direct?.url }
-        if (rest.isEmpty() && direct == null) {
-            if (indexSize == 0 && !serverOn) {
-                sb.append("<div class=\"none\">Your index is empty.<br>Crawl your favourite sites or just browse: pages you visit are added.<br>")
-                sb.append("<a href=\"rweb://crawl\">Build my index</a></div>")
-            } else {
-                sb.append("<div class=\"none\">Nothing found for <b>").append(esc(q)).append("</b>.<br>Try the web search below.</div>")
-            }
-        } else {
-            sb.append("<div class=\"info\">").append(rest.size + (if (direct != null) 1 else 0)).append(" results \u00B7 ")
-            sb.append(indexSize).append(" pages on this phone").append(if (serverOn) " + your server" else "").append("</div>")
-            for (m in rest) {
-                val snip = esc(m.hit.snippet).replace(LocalSearch.HL_OPEN, "<mark>").replace(LocalSearch.HL_CLOSE, "</mark>")
-                sb.append("<div class=\"r\"><div class=\"u\">").append(esc(m.hit.url)).append("<span class=\"src\"> \u00B7 ").append(esc(m.source)).append("</span></div>")
-                sb.append("<a class=\"t\" href=\"").append(esc(m.hit.url)).append("\">").append(esc(m.hit.title.ifBlank { m.hit.url })).append("</a>")
-                sb.append("<div class=\"s\">").append(snip).append("</div></div>")
-            }
-        }
-        val bases = typedSearchBases()
-        sb.append("<div class=\"web\">")
-        sb.append("<a href=\"").append(esc(engines0() + Uri.encode(q))).append("\">Search the web for \u201C").append(esc(q)).append("\u201D</a>")
-        sb.append("<a href=\"").append(esc(bases.second + Uri.encode(q))).append("\">Images</a></div></main></body></html>")
-        return sb.toString()
-    }
-
-    private fun engines0(): String = baseEngines[0].second
-
-    private fun openExact(): Boolean = prefs.getBoolean("open_exact", false)
-    private fun crawlBudget(): Int = prefs.getInt("crawl_pages", 150)
-    private val crawlSizes = listOf(150, 500, 1500)
-
-    private fun runLocalSearch(tab: Tab, query: String) {
-        val q = query.trim()
-        if (q.isEmpty()) return
-        Thread {
-            val remote = java.util.concurrent.atomic.AtomicReference<List<LocalSearch.Hit>>(emptyList())
-            val rt = Thread { remote.set(fetchServerHits(q)) }
-            rt.start()
-            val size = localSearch.count()
-            val local: List<LocalSearch.Hit> = try {
-                localSearch.search(q, 20).hits
-            } catch (e: Exception) {
-                emptyList()
-            }
-            rt.join(4500)
-            val r = remote.get()
-
-            val merged = ArrayList<SrcHit>()
-            val seen = HashSet<String>()
-            for (i in 0 until maxOf(local.size, r.size)) {
-                if (i < local.size && seen.add(local[i].url.trimEnd('/'))) merged.add(SrcHit(local[i], "on this phone"))
-                if (i < r.size && seen.add(r[i].url.trimEnd('/'))) merged.add(SrcHit(r[i], "your server"))
-            }
-            val direct = LocalSearch.directMatch(q, merged.map { it.hit })
-
-            runOnUiThread {
-                if (isFinishing || isDestroyed || tabs.indexOf(tab) < 0) return@runOnUiThread
-                if (direct != null && openExact()) {
-                    navigate(tab, direct.url)
-                    return@runOnUiThread
-                }
-                tab.web.loadDataWithBaseURL(
-                    "https://rweb.local/", localResultsHtml(q, merged, direct, size, serverApiBase() != null), "text/html", "utf-8", null
-                )
-            }
-        }.start()
-    }
-
-    private val noIndexHosts = setOf(
-        "mail.google.com", "web.whatsapp.com", "accounts.google.com", "outlook.live.com", "outlook.office.com",
-        "drive.google.com", "docs.google.com", "calendar.google.com"
-    )
-    private val noIndexUrl = Regex("(login|log-in|signin|sign-in|signup|sign-up|auth|account|checkout|payment|password|banking)", RegexOption.IGNORE_CASE)
-
-    private val indexJs = """
-        (function(){try{
-          if(document.querySelector('input[type=password]'))return '';
-          var r=document.querySelector('meta[name=robots]');if(r&&/noindex/i.test(r.content))return '';
-          var d=document.querySelector('meta[name=description]');
-          return JSON.stringify({t:document.title||'',d:(d&&d.content)||'',x:((document.body&&document.body.innerText)||'').substring(0,30000)});
-        }catch(e){return ''}})()
-    """
-
-    private fun indexCurrentPage(view: WebView?, url: String) {
-        val web = view ?: return
-        val host = hostOf(url) ?: return
-        if (noIndexHosts.any { host == it || host.endsWith(".$it") } || noIndexUrl.containsMatchIn(url)) return
-        web.evaluateJavascript(indexJs) { raw ->
-            val text = try {
-                JSONTokener(raw ?: "null").nextValue() as? String
-            } catch (e: Exception) {
-                null
-            }
-            if (!text.isNullOrEmpty()) {
-                try {
-                    val o = JSONObject(text)
-                    localSearch.index(url, o.optString("t"), o.optString("d") + " " + o.optString("x"))
-                } catch (e: Exception) {
-                }
-            }
-        }
-    }
-
-    private fun isMetered(): Boolean = try {
-        (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
-    } catch (e: Exception) {
-        false
-    }
-
-    private fun startCrawl() {
-        if (crawler.running) {
-            toast("Already crawling")
-            return
-        }
-        if (wifiOnly() && isMetered()) {
-            toast("Connect to Wi-Fi, or turn off \"Crawl on Wi-Fi only\"")
-            return
-        }
-        val seeds = (crawlSeeds() + loadList("bookmarks").map { it.second }).distinct()
-        if (seeds.isEmpty()) {
-            toast("Add some crawl sites first")
-            return
-        }
-        crawlStatus = "starting"
-        toast("Crawling in the background. Keep rweb open.")
-        Thread {
-            val n = try {
-                crawler.crawl(seeds, crawlBudget(), 2, maxOf(60, crawlBudget() / 5), 1000L) { count -> crawlStatus = count.toString() + " pages" }
-            } catch (e: Exception) {
-                0
-            }
-            runOnUiThread {
-                crawlStatus = ""
-                if (!isFinishing && !isDestroyed) toast("Indexed " + n + " new pages")
-            }
-        }.start()
-    }
-
-    private fun askCrawlSites() {
-        val input = EditText(this)
-        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_VARIATION_URI
-        input.minLines = 6
-        input.gravity = Gravity.TOP
-        input.setText(crawlSeeds().joinToString("\n"))
-        dlg()
-            .setTitle("Sites to crawl")
-            .setMessage("One address per line. Your bookmarks are crawled too.")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                val lines = input.text.toString().lines().map { it.trim() }.filter { isHttp(it) }
-                prefs.edit().putString("crawl_seeds", lines.joinToString("\n")).apply()
-                toast(lines.size.toString() + " sites saved")
-            }
-            .setNeutralButton("Reset") { _, _ -> prefs.edit().remove("crawl_seeds").apply() }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showSearchIndexMenu() {
-        val n = localSearch.count()
-        val running = crawler.running
-        val labels = arrayOf(
-            if (running) "Stop crawling (" + crawlStatus + ")" else "Crawl now",
-            "Edit sites to crawl",
-            "Index pages I visit: " + (if (indexVisited()) "On" else "Off"),
-            "Crawl on Wi-Fi only: " + (if (wifiOnly()) "On" else "Off"),
-            "Crawl size: " + crawlBudget() + " pages per run",
-            "Open exact matches directly: " + (if (openExact()) "On" else "Off"),
-            "Clear search index (" + n + " pages)"
-        )
-        dlg()
-            .setTitle("Search index \u00B7 " + n + " pages")
-            .setItems(labels) { _, i ->
-                when (i) {
-                    0 -> if (running) {
-                        crawler.stopRequested = true
-                        toast("Stopping\u2026")
-                    } else {
-                        startCrawl()
-                    }
-                    1 -> askCrawlSites()
-                    2 -> {
-                        prefs.edit().putBoolean("index_visited", !indexVisited()).apply()
-                        toast(if (indexVisited()) "Visited pages will be indexed" else "Visited pages are no longer indexed")
-                    }
-                    3 -> prefs.edit().putBoolean("crawl_wifi", !wifiOnly()).apply()
-                    4 -> {
-                        val next = crawlSizes[(crawlSizes.indexOf(crawlBudget()) + 1) % crawlSizes.size]
-                        prefs.edit().putInt("crawl_pages", next).apply()
-                        toast("Crawl size: " + next + " pages per run")
-                    }
-                    5 -> {
-                        prefs.edit().putBoolean("open_exact", !openExact()).apply()
-                        toast(if (openExact()) "Exact matches open directly" else "Exact matches show as Top result")
-                    }
-                    6 -> confirm("Clear search index?", "This deletes everything rweb has indexed. Your history and bookmarks stay.") {
-                        localSearch.clear()
-                        toast("Search index cleared")
-                    }
-                }
-            }
-            .setNegativeButton("Close", null)
-            .show()
-    }
-
-    private val COMM_MAX = 200
-    @Volatile private var commTab = "global"
-    @Volatile private var commThread = 0L
-    @Volatile private var commHtml: String? = null
-
-    private class ApiResult(val code: Int, val json: JSONObject?)
-
-    private fun commCall(method: String, path: String, body: JSONObject? = null): ApiResult {
-        val base = serverApiBase() ?: return ApiResult(0, null)
-        return try {
-            val c = URL(base + path).openConnection() as HttpURLConnection
-            c.requestMethod = method
-            c.connectTimeout = 5000
-            c.readTimeout = 8000
-            c.setRequestProperty("User-Agent", "rweb-browser")
-            prefs.getString("comm_token", null)?.let { c.setRequestProperty("Authorization", "Bearer " + it) }
-            if (body != null) {
-                c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json")
-                c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            }
-            try {
-                val code = c.responseCode
-                val stream = if (code in 200..299) c.inputStream else c.errorStream
-                val text = stream?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
-                ApiResult(code, try { JSONObject(text) } catch (e: Exception) { null })
-            } finally {
-                c.disconnect()
-            }
-        } catch (e: Exception) {
-            ApiResult(0, null)
-        }
-    }
-
-    private fun jsonStr(j: JSONObject, key: String): String? = if (j.isNull(key)) null else j.optString(key).ifEmpty { null }
-
-    private fun dropCommToken() {
-        prefs.edit().remove("comm_token").remove("comm_user").apply()
-    }
-
-    private fun ago(ts: Long): String {
-        val s = System.currentTimeMillis() / 1000 - ts
-        return when {
-            s < 60 -> "now"
-            s < 3600 -> (s / 60).toString() + "m"
-            s < 86400 -> (s / 3600).toString() + "h"
-            else -> (s / 86400).toString() + "d"
-        }
-    }
-
-    private fun commMsgHtml(msg: String): String = "<div class=\"cb\">" + esc(msg) + "</div>"
-
-    private fun commNoServerHtml(): String =
-        "<div class=\"cb\"><b>Community</b><br>Posts live on your own rweb server. <a href=\"rweb://c/setup\" style=\"color:var(--acc)\">Set up your server</a></div>"
-
-    private fun commHeader(me: String?, withTabs: Boolean): String {
-        val sb = StringBuilder()
-        sb.append("<div class=\"ch\"><b style=\"font-size:15px;color:var(--fg)\">Community</b><span>")
-        if (me != null) {
-            sb.append(esc(me)).append("@abigweb \u00B7 <a href=\"rweb://c/logout\" style=\"color:var(--acc)\">Log out</a>")
-        } else {
-            sb.append("<a href=\"rweb://c/login\" style=\"color:var(--acc)\">Log in / Sign up</a>")
-        }
-        sb.append("</span></div>")
-        if (withTabs) {
-            sb.append("<div class=\"ctabs\"><a class=\"cta").append(if (commTab == "global") " on" else "").append("\" href=\"rweb://c/tab?t=global\">Global</a>")
-            sb.append("<a class=\"cta").append(if (commTab == "following") " on" else "").append("\" href=\"rweb://c/tab?t=following\">Following</a></div>")
-            if (me != null) {
-                sb.append("<div class=\"cb cc\"><textarea id=\"cx\" rows=\"2\" maxlength=\"").append(COMM_MAX)
-                sb.append("\" placeholder=\"What's happening? (").append(COMM_MAX).append(" characters)\" oninput=\"cnt()\"></textarea>")
-                sb.append("<input id=\"cu\" placeholder=\"Link (optional)\" style=\"margin-top:8px;padding:10px 16px;font-size:14px\">")
-                sb.append("<div class=\"ch\" style=\"margin:8px 0 0\"><span id=\"cn\">").append(COMM_MAX)
-                sb.append("</span><a class=\"cf on\" href=\"#\" onclick=\"return cpost()\">Post</a></div></div>")
-            }
-        }
-        return sb.toString()
-    }
-
-    private fun commPostHtml(o: JSONObject, me: String?, inThread: Boolean): String {
-        val id = o.optLong("id")
-        val user = o.optString("user")
-        val mine = o.optBoolean("mine")
-        val text = o.optString("text")
-        val url = o.optString("url")
-        val replies = o.optInt("replies")
-        val sb = StringBuilder()
-        sb.append("<div class=\"cb\"><div class=\"ch\"><span><span class=\"cu\">").append(esc(user)).append("@abigweb</span> \u00B7 ")
-        sb.append(ago(o.optLong("time"))).append("</span>")
-        if (me != null && !mine) {
-            val on = o.optBoolean("following")
-            sb.append("<a class=\"cf").append(if (on) " on" else "").append("\" href=\"rweb://c/follow?u=").append(Uri.encode(user))
-            sb.append("&on=").append(if (on) "0" else "1").append("\">").append(if (on) "Following" else "+ Follow").append("</a>")
-        }
-        sb.append("</div>")
-        if (text.isNotEmpty()) sb.append("<div class=\"ct\">").append(esc(text)).append("</div>")
-        if (isHttp(url)) sb.append("<a class=\"cl\" href=\"").append(esc(url)).append("\">").append(esc(url)).append("</a>")
-        sb.append("<div class=\"ca\"><a href=\"rweb://c/reply?id=").append(id).append("\">Reply</a>")
-        if (!inThread && replies > 0) {
-            sb.append("<a href=\"rweb://c/thread?id=").append(id).append("\">").append(replies).append(if (replies == 1) " reply" else " replies").append("</a>")
-        }
-        if (mine) {
-            sb.append("<a href=\"rweb://c/delete?id=").append(id).append("\">Delete</a>")
-        } else if (me != null) {
-            sb.append("<a href=\"rweb://c/report?id=").append(id).append("\">Report</a>")
-        }
-        sb.append("</div></div>")
-        return sb.toString()
-    }
-
-    private fun buildCommunity(): String {
-        val hadToken = prefs.getString("comm_token", null) != null
-        val thread = commThread
-        if (thread != 0L) {
-            val r = commCall("GET", "/c/thread?id=" + thread)
-            val j = r.json ?: return commMsgHtml("Can't reach your rweb server.")
-            if (r.code != 200) {
-                commThread = 0L
-                return commMsgHtml(j.optString("error", "Post not found."))
-            }
-            val me = jsonStr(j, "me")
-            if (hadToken && me == null) dropCommToken()
-            val sb = StringBuilder(commHeader(me, false))
-            sb.append("<div class=\"ctabs\"><a class=\"cta\" href=\"rweb://c/tab?t=").append(commTab).append("\">\u2039 Back</a></div>")
-            sb.append(commPostHtml(j.getJSONObject("root"), me, true))
-            val arr = j.getJSONArray("replies")
-            for (i in 0 until arr.length()) sb.append(commPostHtml(arr.getJSONObject(i), me, true))
-            return sb.toString()
-        }
-        if (commTab == "following" && !hadToken) {
-            return commHeader(null, true) + commMsgHtml("Log in to see posts from people you follow.")
-        }
-        val r = commCall("GET", "/c/feed?tab=" + commTab + "&limit=20")
-        val j = r.json ?: return commMsgHtml("Can't reach your rweb server.")
-        if (r.code == 401) {
-            dropCommToken()
-            commTab = "global"
-            return commHeader(null, true) + commMsgHtml("Please log in again.")
-        }
-        if (r.code != 200) return commMsgHtml(j.optString("error", "Something went wrong."))
-        val me = jsonStr(j, "me")
-        if (hadToken && me == null) dropCommToken()
-        val sb = StringBuilder(commHeader(me, true))
-        val arr = j.getJSONArray("posts")
-        if (arr.length() == 0) {
-            sb.append(commMsgHtml(if (commTab == "following") "Nothing yet. Follow people from the Global tab." else "No posts yet. Be the first!"))
-        }
-        for (i in 0 until arr.length()) sb.append(commPostHtml(arr.getJSONObject(i), me, false))
-        return sb.toString()
-    }
-
-    private fun injectComm(web: WebView, html: String) {
-        web.evaluateJavascript(
-            "(function(){var e=document.getElementById('comm');if(e){e.innerHTML=" + JSONObject.quote(html) + ";}})()",
-            null
-        )
-    }
-
-    private fun setComm(html: String) {
-        commHtml = html
-        for (t in tabs) {
-            if (!t.priv && t.url.isEmpty()) injectComm(t.web, html)
-        }
-    }
-
-    private fun refreshCommunity() {
-        if (serverApiBase() == null) {
-            setComm(commNoServerHtml())
-            return
-        }
-        Thread {
-            val html = try {
-                buildCommunity()
-            } catch (e: Exception) {
-                commMsgHtml("Can't reach your rweb server.")
-            }
-            runOnUiThread {
-                if (!isFinishing && !isDestroyed) setComm(html)
-            }
-        }.start()
-    }
-
-    private fun apiError(r: ApiResult): String =
-        r.json?.optString("error")?.takeIf { it.isNotEmpty() } ?: "Can't reach your rweb server"
-
-    private fun commAction(path: String, body: JSONObject, okMsg: String?) {
-        Thread {
-            val r = commCall("POST", path, body)
-            runOnUiThread {
-                if (r.code in 200..299) {
-                    if (okMsg != null) toast(okMsg)
-                } else if (r.code == 401) {
-                    dropCommToken()
-                    toast("Please log in again")
-                } else {
-                    toast(apiError(r))
-                }
-            }
-            refreshCommunity()
-        }.start()
-    }
-
-    private fun sendPost(textIn: String, urlIn: String, replyTo: Long?) {
-        val text = textIn.trim()
-        var url = urlIn.trim()
-        if (prefs.getString("comm_token", null) == null) {
-            showCommunityLogin()
-            return
-        }
-        if (text.isEmpty() && url.isEmpty()) {
-            toast("Write something or add a link")
-            return
-        }
-        if (text.codePointCount(0, text.length) > COMM_MAX) {
-            toast("Posts are at most " + COMM_MAX + " characters")
-            return
-        }
-        if (url.isNotEmpty() && !isHttp(url)) url = "https://" + url
-        val body = JSONObject().put("text", text).put("url", url)
-        if (replyTo != null) body.put("reply_to", replyTo)
-        Thread {
-            val r = commCall("POST", "/c/post", body)
-            runOnUiThread {
-                if (r.code in 200..299) {
-                    toast(if (replyTo != null) "Reply posted" else "Posted")
-                } else if (r.code == 401) {
-                    dropCommToken()
-                    toast("Please log in again")
-                } else {
-                    toast(apiError(r))
-                }
-            }
-            refreshCommunity()
-        }.start()
-    }
-
-    private fun showReplyDialog(postId: Long) {
-        if (prefs.getString("comm_token", null) == null) {
-            showCommunityLogin()
-            return
-        }
-        val box = LinearLayout(this)
-        box.orientation = LinearLayout.VERTICAL
-        box.setPadding(dp(20), dp(10), dp(20), dp(4))
-        val text = EditText(this)
-        text.hint = "Your reply"
-        text.filters = arrayOf<InputFilter>(InputFilter.LengthFilter(COMM_MAX))
-        text.minLines = 3
-        text.gravity = Gravity.TOP
-        val counter = TextView(this)
-        counter.text = COMM_MAX.toString()
-        counter.gravity = Gravity.END
-        text.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                counter.text = (COMM_MAX - (s?.length ?: 0)).toString()
-            }
-        })
-        val link = EditText(this)
-        link.hint = "Link (optional)"
-        link.setSingleLine()
-        link.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        box.addView(text)
-        box.addView(counter)
-        box.addView(link)
-        dlg()
-            .setTitle("Reply")
-            .setView(box)
-            .setPositiveButton("Reply") { _, _ -> sendPost(text.text.toString(), link.text.toString(), postId) }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showCommunityLogin() {
-        if (serverApiBase() == null) {
-            askRwebServer()
-            return
-        }
-        val box = LinearLayout(this)
-        box.orientation = LinearLayout.VERTICAL
-        box.setPadding(dp(20), dp(10), dp(20), dp(4))
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        val name = EditText(this)
-        name.hint = "username"
-        name.setSingleLine()
-        name.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        row.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val suffix = TextView(this)
-        suffix.text = "@abigweb"
-        suffix.setPadding(dp(6), 0, 0, 0)
-        row.addView(suffix)
-        val pw = EditText(this)
-        pw.hint = "password (6+ characters)"
-        pw.setSingleLine()
-        pw.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        box.addView(row)
-        box.addView(pw)
-        dlg()
-            .setTitle("Community")
-            .setView(box)
-            .setPositiveButton("Log in") { _, _ -> commAuth("login", name.text.toString(), pw.text.toString()) }
-            .setNeutralButton("Create account") { _, _ -> commAuth("register", name.text.toString(), pw.text.toString()) }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun commAuth(kind: String, user: String, password: String) {
-        Thread {
-            val r = commCall("POST", "/c/" + kind, JSONObject().put("user", user).put("password", password))
-            runOnUiThread {
-                val j = r.json
-                val token = if (j != null) jsonStr(j, "token") else null
-                val who = if (j != null) jsonStr(j, "user") else null
-                if (r.code in 200..299 && token != null && who != null) {
-                    prefs.edit().putString("comm_token", token).putString("comm_user", who).apply()
-                    toast("Signed in as " + who + "@abigweb")
-                    refreshCommunity()
-                } else {
-                    toast(apiError(r))
-                }
-            }
-        }.start()
-    }
-
-    private fun handleCommunity(tab: Tab, u: Uri) {
-        when (u.lastPathSegment) {
-            "tab" -> {
-                commTab = if (u.getQueryParameter("t") == "following") "following" else "global"
-                commThread = 0L
-                refreshCommunity()
-            }
-            "thread" -> {
-                commThread = u.getQueryParameter("id")?.toLongOrNull() ?: 0L
-                refreshCommunity()
-            }
-            "post" -> sendPost(u.getQueryParameter("text") ?: "", u.getQueryParameter("url") ?: "", null)
-            "reply" -> u.getQueryParameter("id")?.toLongOrNull()?.let { showReplyDialog(it) }
-            "follow" -> {
-                val name = u.getQueryParameter("u") ?: return
-                commAction(if (u.getQueryParameter("on") == "1") "/c/follow" else "/c/unfollow", JSONObject().put("user", name), null)
-            }
-            "delete" -> u.getQueryParameter("id")?.toLongOrNull()?.let { id ->
-                dlg()
-                    .setTitle("Delete this post?")
-                    .setMessage("Its replies are deleted too.")
-                    .setPositiveButton("Delete") { _, _ ->
-                        if (commThread == id) commThread = 0L
-                        commAction("/c/delete", JSONObject().put("id", id), "Deleted")
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
-            "report" -> u.getQueryParameter("id")?.toLongOrNull()?.let {
-                commAction("/c/report", JSONObject().put("id", it).put("reason", "reported from the app"), "Thanks, reported")
-            }
-            "login" -> showCommunityLogin()
-            "logout" -> {
-                Thread { commCall("POST", "/c/logout", JSONObject()) }.start()
-                dropCommToken()
-                commThread = 0L
-                refreshCommunity()
-            }
-            "setup" -> askRwebServer()
-        }
     }
 
     private val SHEET = Color.parseColor("#2A0710")
@@ -4103,7 +3256,6 @@ class MainActivity : ComponentActivity() {
             MenuRow("360 / VR video viewer", null, false) { openVrViewer() },
             MenuRow("Find in page", null, false) { findInPage() },
             MenuRow("Search engine", allEngines().first { it.second == searchBase() }.first, false) { chooseEngine() },
-            MenuRow("Search index", localSearch.count().toString() + " pages", false) { showSearchIndexMenu() },
             MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
             MenuRow("Homepage news", if (prefs.getBoolean("news_open", true)) "Expanded" else "Collapsed", false) { toggleNewsFold() },
             MenuRow("Homepage theme", if (isDark()) "Dark" else "Light", false) { toggleHomeTheme() },
@@ -4206,8 +3358,6 @@ class MainActivity : ComponentActivity() {
         WebStorage.getInstance().deleteAllData()
         GeolocationPermissions.getInstance().clearAll()
         saveList("history", emptyList())
-        localSearch.clear()
-        dropCommToken()
         toast("Browsing data cleared")
     }
 }
