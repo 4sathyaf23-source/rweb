@@ -35,7 +35,6 @@ import android.os.Message
 import android.speech.RecognizerIntent
 import android.provider.MediaStore
 import android.text.Editable
-import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
 import android.text.TextUtils
@@ -108,6 +107,8 @@ class MainActivity : ComponentActivity() {
         val blocked = AtomicInteger(0)
         var readerUrl: String? = null
         var httpFallback: String? = null
+        // set while the tab runs the desktop identity only because the current site needs it (WhatsApp Web, Google Lens)
+        var autoDesktopSite: String? = null
     }
 
     private val BG = Color.parseColor("#3A0A14")
@@ -291,6 +292,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashLogger()
         prefs = getSharedPreferences("rweb", MODE_PRIVATE)
         loadAdBlockSettings()
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
@@ -312,6 +314,52 @@ class MainActivity : ComponentActivity() {
         val link = intent?.data?.toString()
         if (link != null) newTab(link) else if (tabs.isEmpty()) newTab(null)
         if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
+        handler.post { offerCrashReport() }
+    }
+
+    // ---- crash log: stays on the phone; nothing is sent unless the user taps Share ----
+
+    private fun installCrashLogger() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            try {
+                File(filesDir, "crash.log").writeText(
+                    "rweb crash on " + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE + "\n" +
+                        Log.getStackTraceString(error).take(20000)
+                )
+            } catch (e: Exception) {
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    private fun offerCrashReport() {
+        val f = File(filesDir, "crash.log")
+        if (!f.exists() || isFinishing) return
+        val text = try {
+            f.readText()
+        } catch (e: Exception) {
+            ""
+        }
+        f.delete()
+        if (text.isBlank()) return
+        dlg()
+            .setTitle("rweb closed unexpectedly")
+            .setMessage("Share the crash details with the developer? Nothing is sent automatically.")
+            .setPositiveButton("Share") { _, _ -> shareText(text) }
+            .setNegativeButton("Dismiss", null)
+            .show()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            synchronized(ogCache) {
+                ogCache.clear()
+                ogVideo.clear()
+            }
+            linkTitles.clear()
+        }
     }
 
     private fun buildDesktopUa(): String {
@@ -753,8 +801,12 @@ class MainActivity : ComponentActivity() {
 
     private fun current(): Tab = tabs[cur]
 
-    private fun displayUrl(url: String): String =
-        if (url.startsWith("about:") || url.startsWith("data:") || url.startsWith("https://rweb.local")) "" else url
+    /** What the address bar shows. Built-in pages show their rweb:// name; the start page shows nothing. */
+    private fun displayUrl(url: String): String = when {
+        url == HistoryPage.URL -> "rweb://history"
+        url.startsWith("about:") || url.startsWith("data:") || url.startsWith("https://rweb.local") -> ""
+        else -> url
+    }
 
     private fun hideKeyboard() {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -773,9 +825,42 @@ class MainActivity : ComponentActivity() {
         return uri.buildUpon().scheme("https").build().toString()
     }
 
+    // ---- desktop identity for sites that need it ----
+    // WhatsApp Web only shows its QR code, and Google Lens only shows its upload page, to desktop browsers.
+    // The identity must be switched BEFORE the page is requested; changing it inside shouldOverrideUrlLoading
+    // (as before) only affected the next navigation, which is why those tiles needed a second tap.
+
+    private val desktopOnlySites = setOf("web.whatsapp.com", "lens.google.com")
+
+    private fun siteKey(host: String): String = host.split('.').takeLast(2).joinToString(".")
+
+    /** Applies or removes the automatic desktop identity for [url]. Returns true if the identity changed. */
+    private fun syncAutoUa(tab: Tab, url: String): Boolean {
+        val host = hostOf(url) ?: return false
+        val needs = host in desktopOnlySites && !tab.desktop
+        val key = siteKey(host)
+        val active = tab.autoDesktopSite
+        if (active != null && active != key) {
+            if (needs) {
+                tab.autoDesktopSite = key // moving between two sites that both need it: already desktop
+                return false
+            }
+            tab.autoDesktopSite = null
+            applyClientIdentity(tab.web.settings, tab.desktop, tab.desktop)
+            return true
+        }
+        if (active == null && needs) {
+            tab.autoDesktopSite = key
+            applyClientIdentity(tab.web.settings, true, true)
+            return true
+        }
+        return false
+    }
+
     private fun navigate(tab: Tab, target: String) {
         val up = upgradeHttps(target)
         tab.httpFallback = if (up != target) target else null
+        syncAutoUa(tab, up)
         tab.web.loadUrl(up)
     }
 
@@ -919,7 +1004,14 @@ class MainActivity : ComponentActivity() {
         }
         t.pendingUrl?.let {
             t.pendingUrl = null
-            if (it.isEmpty()) loadStart(t.web) else t.web.loadUrl(it)
+            if (it.isEmpty()) {
+                loadStart(t.web)
+            } else if (it == "rweb://history") {
+                openHistoryPage()
+            } else {
+                syncAutoUa(t, it)
+                t.web.loadUrl(it)
+            }
         }
     }
 
@@ -1216,10 +1308,11 @@ class MainActivity : ComponentActivity() {
                     linkTitles[urlStr]?.let { recordClick(urlStr, it) }
                 }
 
-                if (urlStr.contains("web.whatsapp.com")) {
-                    view?.settings?.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                } else {
-                    view?.settings?.userAgentString = if (tab.desktop) desktopUa else mobileUa
+                // WhatsApp Web / Google Lens need the desktop identity. Switch it now and restart this navigation
+                // ourselves, so the first tap loads the right page.
+                if (req.isForMainFrame && (u.scheme == "http" || u.scheme == "https") && syncAutoUa(tab, urlStr)) {
+                    view?.loadUrl(urlStr)
+                    return true
                 }
 
                 val scheme = u.scheme ?: return false
@@ -1228,6 +1321,7 @@ class MainActivity : ComponentActivity() {
                         "voice" -> launchVoice()
                         "photo" -> openPhotoSearch()
                         "home" -> loadStart(tab.web)
+                        "history" -> handleHistoryLink(tab, u)
                     }
                     return true
                 }
@@ -1552,7 +1646,12 @@ class MainActivity : ComponentActivity() {
         }
         val icons = siteIcons()
         val sb = StringBuilder()
-        sb.append(HEAD_A.replaceFirst("<html>", if (isDark()) "<html class=\"dark\">" else "<html>"))
+        // The page starts at a fixed height instead of being centred: the news/video blocks arrive a moment after
+        // the tiles, and a centred page used to slide the tiles upward while you were reaching for them.
+        sb.append(
+            HEAD_A.replaceFirst("<html>", if (isDark()) "<html class=\"dark\">" else "<html>")
+                .replaceFirst("</style>", "body{justify-content:flex-start;padding-top:max(28px,7vh)}</style>")
+        )
         sb.append(esc(searchBase().substringBefore("?q="))).append(HEAD_B)
         for (t in tiles) {
             val letter = t.first.trim().take(1).uppercase()
@@ -2143,7 +2242,11 @@ class MainActivity : ComponentActivity() {
         val send = Intent(Intent.ACTION_SEND)
         send.type = "text/plain"
         send.putExtra(Intent.EXTRA_TEXT, t)
-        startActivity(Intent.createChooser(send, "Share"))
+        try {
+            startActivity(Intent.createChooser(send, "Share"))
+        } catch (e: Exception) {
+            toast("No app can share this")
+        }
     }
 
     private fun linkMenu(tab: Tab, link: String?, image: String?) {
@@ -2657,8 +2760,11 @@ class MainActivity : ComponentActivity() {
 
     private fun openPhotoSearch() {
         hideSuggestions()
+        val t = currentOrNull() ?: return
+        // Google Lens only offers its upload page to desktop browsers; navigate() switches this tab to the desktop
+        // identity for it (and back afterwards). Loading it directly with loadUrl() left it on the mobile identity.
         val url = if (searchBase().startsWith("https://www.bing.com")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
-        currentOrNull()?.web?.loadUrl(url)
+        navigate(t, url)
         toast("Choose or take a photo on the page")
     }
 
@@ -2922,6 +3028,53 @@ class MainActivity : ComponentActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    // ---- History page (rweb://history): its own page with search, per-entry delete and "Clear all history" ----
+
+    private var historyQuery = ""
+
+    private fun openHistoryPage() {
+        val t = currentOrNull() ?: return
+        historyQuery = ""
+        t.web.loadDataWithBaseURL(
+            HistoryPage.URL, HistoryPage.page(isDark(), loadList("history"), ""), "text/html", "utf-8", HistoryPage.URL
+        )
+    }
+
+    /** Re-draws the list inside the open History page, without adding another entry to the back stack. */
+    private fun refreshHistoryPage(tab: Tab) {
+        val body = HistoryPage.body(loadList("history"), historyQuery)
+        tab.web.evaluateJavascript("document.body.innerHTML=" + JSONObject.quote(body) + ";", null)
+    }
+
+    private fun handleHistoryLink(tab: Tab, u: Uri) {
+        when (u.lastPathSegment) {
+            "search" -> {
+                historyQuery = u.getQueryParameter("q") ?: ""
+                refreshHistoryPage(tab)
+            }
+            "delete" -> {
+                val target = u.getQueryParameter("u") ?: return
+                val l = loadList("history")
+                l.removeAll { it.second == target }
+                saveList("history", l)
+                refreshHistoryPage(tab)
+            }
+            "clear" -> {
+                dlg()
+                    .setTitle("Clear all history?")
+                    .setMessage("This removes every page from your browsing history. Bookmarks and downloads stay.")
+                    .setPositiveButton("Clear history") { _, _ ->
+                        saveList("history", emptyList())
+                        historyQuery = ""
+                        refreshHistoryPage(tab)
+                        toast("History cleared")
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
     }
 
     private val SHEET = Color.parseColor("#2A0710")
@@ -3250,7 +3403,7 @@ class MainActivity : ComponentActivity() {
         val t = currentOrNull() ?: return
         val rows = listOf(
             MenuRow("Bookmarks", null, false) { showList("Bookmarks", "bookmarks") },
-            MenuRow("History", null, false) { showList("History", "history") },
+            MenuRow("History", null, false) { openHistoryPage() },
             MenuRow("Downloads", null, false) { showDownloads() },
             MenuRow("Reading mode", if (t.readerUrl != null) "On" else "Off", false) { toggleReader() },
             MenuRow("360 / VR video viewer", null, false) { openVrViewer() },
@@ -3323,6 +3476,7 @@ class MainActivity : ComponentActivity() {
     private fun toggleDesktop() {
         val t = current()
         t.desktop = !t.desktop
+        t.autoDesktopSite = null // the user's choice wins over the automatic one
         applyClientIdentity(t.web.settings, t.desktop, true)
         t.web.reload()
         toast(if (t.desktop) "Desktop site on" else "Desktop site off")
@@ -3334,10 +3488,7 @@ class MainActivity : ComponentActivity() {
             toast("Open a page first")
             return
         }
-        val send = Intent(Intent.ACTION_SEND)
-        send.type = "text/plain"
-        send.putExtra(Intent.EXTRA_TEXT, u)
-        startActivity(Intent.createChooser(send, "Share page"))
+        shareText(u)
     }
 
     private fun clearData() {
