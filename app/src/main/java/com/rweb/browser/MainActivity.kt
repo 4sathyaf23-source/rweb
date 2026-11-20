@@ -11,14 +11,14 @@ import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -32,12 +32,12 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
-import android.provider.MediaStore
 import android.speech.RecognizerIntent
+import android.provider.MediaStore
 import android.text.Editable
 import android.text.InputType
-import android.text.TextUtils
 import android.text.TextWatcher
+import android.text.TextUtils
 import android.util.Log
 import android.util.Xml
 import android.view.Gravity
@@ -158,6 +158,8 @@ class MainActivity : ComponentActivity() {
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
+    // Cards built per section, and how many are visible under "All". The rest only appear when a sub-category
+    // matches them, so a category has plenty to show without making the start page endless.
     private val NEWS_RENDER = 90
     private val NEWS_INITIAL = 25
     private val VIDEO_RENDER = 60
@@ -289,7 +291,6 @@ class MainActivity : ComponentActivity() {
         Pair("CNBC", "https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA")
     )
 
-    // Top 30 websites rendered in a single horizontal scroll row
     private val topSites = listOf(
         Pair("YouTube", "https://www.youtube.com"),
         Pair("Google", "https://www.google.com"),
@@ -337,10 +338,10 @@ class MainActivity : ComponentActivity() {
 
         const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>"""
 
-        // Start page styles: single-line logo + rweb, search box, single-row search modes, and horizontal scroll rails.
+        // Start page styles. Every section has spacing, a top border divider, and its own tinted block.
         const val START_CSS = """
-:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08)}
-html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35)}
+:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#C41E3A;--sh:0 4px 14px rgba(0,0,0,.08);--line:rgba(196,30,58,.15);--t1:#FFF8F9;--t2:#F7FAFF;--t3:#F8FCF9;--t4:#FFFBF3;--t5:#F9F7FF}
+html.dark{--bg:#3A0A14;--fg:#FFF1F3;--mute:#E3A9B1;--card:#7A1022;--fld:#7A1022;--acc:#FF6B7D;--sh:0 4px 14px rgba(0,0,0,.35);--line:rgba(255,107,125,.24);--t1:#470C18;--t2:#420D1B;--t3:#4B0D18;--t4:#440E1C;--t5:#490B17}
 *{box-sizing:border-box}
 body{margin:0 auto;padding:max(20px,4vh) 0 40px;max-width:560px;background:var(--bg);color:var(--fg);font-family:sans-serif}
 .brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;white-space:nowrap}
@@ -349,27 +350,36 @@ body{margin:0 auto;padding:max(20px,4vh) 0 40px;max-width:560px;background:var(-
 h1{color:var(--acc);font-size:32px;margin:0;line-height:1}
 .sf{margin:0 16px}
 input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}
-.hrow,.vrow{display:flex;gap:12px;overflow-x:auto;padding:4px 16px 10px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none}
+.hrow,.vrow{display:flex;gap:16px;overflow-x:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none}
 .hrow::-webkit-scrollbar,.vrow::-webkit-scrollbar,.cchips::-webkit-scrollbar{display:none}
-.chips{margin-top:10px;gap:10px;flex-wrap:nowrap}
+.chips{margin-top:10px;gap:14px;flex-wrap:nowrap}
 .chip{flex:0 0 auto;padding:8px 16px;border-radius:18px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh);white-space:nowrap;scroll-snap-align:start}
 .chip.on{background:var(--acc);color:#fff}
-.sec{margin-top:18px}
-.nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 8px}
+.sec{margin:16px 10px 0;padding:14px 0 6px;border-top:1.5px solid var(--line);border-radius:18px}
+.s1{background:var(--t1)}
+.s2{background:var(--t2)}
+.s3{background:var(--t3)}
+.s4{background:var(--t4)}
+.s5{background:var(--t5)}
+.nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 10px}
 .nh a{color:var(--acc);text-decoration:none;text-transform:none;letter-spacing:0}
-.hint{padding:0 16px;color:var(--mute);font-size:13px}
-.tile{flex:0 0 72px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px;scroll-snap-align:start}
+summary.nh{list-style:none;cursor:pointer;margin:0}
+summary.nh::-webkit-details-marker{display:none}
+summary.nh::after{content:"\25BE";font-size:14px}
+details[open] summary.nh::after{content:"\25B4"}
+.hint{padding:0 16px 8px;color:var(--mute);font-size:13px}
+.tile{flex:0 0 82px;text-decoration:none;color:var(--fg);text-align:center;font-size:12px;scroll-snap-align:start}
 .ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}
 .ic img{position:absolute;top:0;left:0;width:100%;height:100%;padding:13px;background:#FFFFFF;object-fit:contain}
-.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.rs{flex:0 0 auto;max-width:220px;padding:9px 16px;border-radius:18px;background:var(--card);box-shadow:var(--sh);color:var(--fg);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;scroll-snap-align:start}
-.vc{flex:0 0 230px;text-decoration:none;color:var(--fg);scroll-snap-align:start}
-.vt{position:relative;width:230px;height:130px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}
+.nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 2px}
+.rs{flex:0 0 auto;max-width:220px;padding:10px 18px;border-radius:18px;background:var(--card);box-shadow:var(--sh);color:var(--fg);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;scroll-snap-align:start}
+.vc{flex:0 0 236px;text-decoration:none;color:var(--fg);scroll-snap-align:start}
+.vt{position:relative;width:236px;height:132px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}
 .vt img{width:100%;height:100%;object-fit:cover;display:block}
 .vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}
 .vn{font-size:13px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.nw{flex:0 0 240px;display:block;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--sh);color:var(--fg);text-decoration:none;scroll-snap-align:start}
-.nw .ni{width:100%;height:130px;object-fit:cover;display:block}
+.nw{flex:0 0 244px;display:block;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--sh);color:var(--fg);text-decoration:none;scroll-snap-align:start}
+.nw .ni{width:100%;height:132px;object-fit:cover;display:block}
 .nw .nt{display:-webkit-box;padding:10px 12px;font-size:13px;line-height:1.35;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .cchips{display:flex;gap:8px;overflow-x:auto;padding:4px 16px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .cchip{flex:0 0 auto;padding:6px 14px;border-radius:14px;border:0;background:var(--fld);color:var(--fg);font-size:12px;box-shadow:var(--sh);white-space:nowrap}
@@ -391,7 +401,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         wipePrivate()
         cleanPrivateDownloads()
 
-        runIo {
+        runIo { // older formats
             for (old in listOf("vids_cache.json", "news_cache.json", "news_cache_v2.json")) File(filesDir, old).delete()
         }
         vidHtml = loadFeedCache("vids_cache_v2.json")
@@ -406,6 +416,8 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         if (intent?.getBooleanExtra("app_mode", false) == true) setBarsHidden(true)
         handler.post { offerCrashReport() }
     }
+
+    // ---- crash log: stays on the phone; nothing is sent unless the user taps Share ----
 
     private fun installCrashLogger() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
@@ -734,7 +746,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         address = EditText(this)
         address.background = null
         address.setSingleLine()
-        address.hint = "Search the web"
+        address.hint = "Enter address or search"
         address.setHintTextColor(MUTE)
         address.setTextColor(INK)
         address.textSize = 15f
@@ -890,6 +902,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
 
     private fun current(): Tab = tabs[cur]
 
+    /** What the address bar shows. Built-in pages show their rweb:// name; the start page shows nothing. */
     private fun displayUrl(url: String): String = when {
         url == HistoryPage.URL -> "rweb://history"
         url.startsWith("about:") || url.startsWith("data:") || url.startsWith("https://rweb.local") -> ""
@@ -913,10 +926,16 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         return uri.buildUpon().scheme("https").build().toString()
     }
 
+    // ---- desktop identity for sites that need it ----
+    // WhatsApp Web only shows its QR code, and Google Lens only shows its upload page, to desktop browsers.
+    // The identity must be switched BEFORE the page is requested; changing it inside shouldOverrideUrlLoading
+    // (as before) only affected the next navigation, which is why those tiles needed a second tap.
+
     private val desktopOnlySites = setOf("web.whatsapp.com", "lens.google.com")
 
     private fun siteKey(host: String): String = host.split('.').takeLast(2).joinToString(".")
 
+    /** Applies or removes the automatic desktop identity for [url]. Returns true if the identity changed. */
     private fun syncAutoUa(tab: Tab, url: String): Boolean {
         val host = hostOf(url) ?: return false
         val needs = host in desktopOnlySites && !tab.desktop
@@ -924,7 +943,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         val active = tab.autoDesktopSite
         if (active != null && active != key) {
             if (needs) {
-                tab.autoDesktopSite = key
+                tab.autoDesktopSite = key // moving between two sites that both need it: already desktop
                 return false
             }
             tab.autoDesktopSite = null
@@ -1066,7 +1085,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         topBar.setBackgroundColor(barColor)
         statusSpacer.setBackgroundColor(barColor)
         bottomBg.setColor(barColor)
-        address.hint = if (t.priv) "Private tab: search the web" else "Search the web"
+        address.hint = if (t.priv) "Private tab: enter address" else "Enter address or search"
         if (lastPrivUi != t.priv) {
             lastPrivUi = t.priv
             address.imeOptions = if (t.priv) {
@@ -1258,6 +1277,8 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         }
     }
 
+    // ---- sub-categories ----
+
     private val categoryNames = listOf("Tech", "Sports", "Business", "Science", "Health", "Entertainment", "Politics", "World")
 
     private val categoryWords: Map<String, Set<String>> = mapOf(
@@ -1271,6 +1292,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         "World" to setOf("war", "ukraine", "russia", "gaza", "israel", "iran", "china", "nato", "border", "refugees", "attack", "attacks", "conflict", "ceasefire", "flood", "floods", "storm", "hurricane", "killed", "dead", "troops", "military", "peace", "talks", "sanctions", "crisis", "un", "europe", "africa", "asia")
     )
 
+    /** feed or channel name -> category: everything from that source belongs to it, whatever the headline says */
     private val feedCategory = mapOf(
         "BBC Technology" to "Tech", "TechCrunch" to "Tech", "The Verge" to "Tech",
         "BBC Business" to "Business", "CNBC" to "Business",
@@ -1282,7 +1304,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         "BBC World" to "World"
     )
 
-    private val catHint = ConcurrentHashMap<String, String>()
+    private val catHint = ConcurrentHashMap<String, String>() // link -> category of the source it came from
 
     private fun noteSourceCategory(feedName: String, items: List<Triple<String, String, String>>) {
         val cat = feedCategory[feedName] ?: return
@@ -1290,6 +1312,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         for (item in items) catHint[item.second] = cat
     }
 
+    /** Space-separated categories of one story ("Tech Business"); "General" when none matches. */
     private fun getCategories(title: String, url: String): String {
         val w = words(title).toSet()
         val found = LinkedHashSet<String>()
@@ -1300,6 +1323,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         return if (found.isEmpty()) "General" else found.joinToString(" ")
     }
 
+    /** Chip row for one section. [scope] is "news" or "vids"; the chips only filter that section. */
     private fun getCategoryChipsHtml(scope: String): String {
         val sb = StringBuilder("<div class=\"cchips\">")
         sb.append("<button class=\"cchip on\" onclick=\"filterCategory('").append(scope).append("','All',this)\">All</button>")
@@ -1419,6 +1443,8 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
                     linkTitles[urlStr]?.let { recordClick(urlStr, it) }
                 }
 
+                // WhatsApp Web / Google Lens need the desktop identity. Switch it now and restart this navigation
+                // ourselves, so the first tap loads the right page.
                 if (req.isForMainFrame && (u.scheme == "http" || u.scheme == "https") && syncAutoUa(tab, urlStr)) {
                     view?.loadUrl(urlStr)
                     return true
@@ -1712,7 +1738,9 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
             .show()
     }
 
-    private fun allEngines(): List<Pair<String, String>> = baseEngines
+    private fun allEngines(): List<Pair<String, String>> {
+        return baseEngines
+    }
 
     private fun searchBase(): String {
         val saved = prefs.getString("search", null)
@@ -1737,11 +1765,12 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
 
     private fun siteIcons(): Boolean = prefs.getBoolean("icons", true)
 
+    /** Top of every start page: logo and name on ONE line, the search box, then one scrolling row of search types. */
     private fun homeHead(dark: Boolean): String =
         "<!doctype html><html" + (if (dark) " class=\"dark\"" else "") + "><head><meta charset=\"utf-8\">" +
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>" + START_CSS + "</style></head><body>" +
             "<div class=\"brand\"><span class=\"logo\">" + LOGO_SVG + "</span><h1>rweb</h1></div>" +
-            "<form class=\"sf\" onsubmit=\"return go()\"><input id=\"q\" name=\"q\" placeholder=\"Search the web\" " +
+            "<form class=\"sf\" onsubmit=\"return go()\"><input id=\"q\" name=\"q\" placeholder=\"Search the web or type an address\" " +
             "autocomplete=\"off\" autocapitalize=\"off\" enterkeyhint=\"search\"></form>" +
             "<div class=\"hrow chips\"><span class=\"chip on\" id=\"c-web\" onclick=\"pick('web')\">Web</span>" +
             "<span class=\"chip\" id=\"c-img\" onclick=\"pick('img')\">Images</span>" +
@@ -1769,13 +1798,13 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         val icons = siteIcons()
         val sb = StringBuilder(homeHead(isDark()))
 
-        sb.append("<div class=\"sec\"><div class=\"nh\"><span>Top websites</span></div><div class=\"hrow\">")
-        for (t in topSites.take(30)) sb.append(tileHtml(t.first, t.second, icons))
+        sb.append("<div class=\"sec s1\"><div class=\"nh\"><span>Top websites</span></div><div class=\"hrow\">")
+        for (t in topSites) sb.append(tileHtml(t.first, t.second, icons))
         sb.append("</div></div>")
 
         val recents = recentSearches()
         if (recents.isNotEmpty()) {
-            sb.append("<div class=\"sec\" id=\"recent\"><div class=\"nh\"><span>Recent searches</span><a href=\"rweb://recent/clear\">Clear</a></div><div class=\"hrow\">")
+            sb.append("<div class=\"sec s2\" id=\"recent\"><div class=\"nh\"><span>Recent searches</span><a href=\"rweb://recent/clear\">Clear</a></div><div class=\"hrow\">")
             for (r in recents) {
                 sb.append("<a class=\"rs\" href=\"rweb://s?k=web&amp;q=").append(Uri.encode(r)).append("\">").append(esc(r)).append("</a>")
             }
@@ -1783,7 +1812,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         }
 
         val marks = loadList("bookmarks").take(30)
-        sb.append("<div class=\"sec\"><div class=\"nh\"><span>Bookmarks</span></div>")
+        sb.append("<div class=\"sec s3\"><div class=\"nh\"><span>Bookmarks</span></div>")
         if (marks.isEmpty()) {
             sb.append("<div class=\"hint\">Bookmark a page from the menu and it shows up here.</div>")
         } else {
@@ -1796,10 +1825,18 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         }
         sb.append("</div>")
 
-        sb.append("<div id=\"vids\" class=\"sec\">").append(vidHtml ?: "<div class=\"nh\">Loading trending videos...</div>").append("</div>")
-        sb.append("<div id=\"news\" class=\"sec\">").append(newsHtml ?: "<div class=\"nh\">Loading latest news...</div>").append("</div>")
+        sb.append("<div id=\"vids\" class=\"sec s4\">").append(vidHtml ?: "<div class=\"nh\">Loading top news videos...</div>").append("</div>")
+        sb.append("<div id=\"news\" class=\"sec s5\">").append(newsHtml ?: "<div class=\"nh\">Loading aggregated news...</div>").append("</div>")
         sb.append(searchScript()).append("</body></html>")
         return sb.toString()
+    }
+
+    private fun openDownloads() {
+        try {
+            startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
+        } catch (e: Exception) {
+            toast("Can't open Downloads")
+        }
     }
 
     private fun copyLink() {
@@ -2216,7 +2253,6 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
 
     private fun buildNews(name: String, items: List<Triple<String, String, String>>): String {
         val open = prefs.getBoolean("news_open", true)
-        if (!open) return ""
         val readSet = getReadArticles()
         val sorted = items
             .filter { !readSet.contains(it.second) }
@@ -2235,7 +2271,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
             if (!pic.startsWith("http") || isVideo) continue
             pic = secureImage(pic)
 
-            val late = shown >= NEWS_INITIAL
+            val late = shown >= NEWS_INITIAL // built, but only shown when a sub-category matches it
             shown++
             rememberTitle(n.second, n.first)
             val broken = "var c=this.closest('.nw');if(c)c.remove()"
@@ -2248,9 +2284,11 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         if (shown == 0) return ""
 
         val sb = StringBuilder()
-        sb.append("<div class=\"nh\"><span>Latest News</span></div>")
+        sb.append("<details class=\"nd\"").append(if (open) " open" else "").append(">")
+        sb.append("<summary class=\"nh\"><span>Latest News</span></summary>")
         sb.append(getCategoryChipsHtml("news"))
         sb.append("<div class=\"vrow\">").append(cards).append("</div>")
+        sb.append("</details>")
         return sb.toString()
     }
 
@@ -2827,6 +2865,8 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
             .show()
     }
 
+    // ---- recent searches (never recorded in private tabs) ----
+
     private fun recentSearches(): List<String> = try {
         val a = JSONArray(prefs.getString("recent_searches", "[]"))
         (0 until a.length()).map { a.getString(it) }
@@ -2843,6 +2883,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         prefs.edit().putString("recent_searches", JSONArray(l.take(20)).toString()).apply()
     }
 
+    /** A search typed on the start page (kind: web, img or vid) or tapped from Recent searches. */
     private fun runSearch(tab: Tab, kind: String, q: String) {
         val text = q.trim()
         if (text.isEmpty()) return
@@ -2871,7 +2912,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         val b = typedSearchBases()
         return "<script>var B={web:" + JSONObject.quote(b.first) + ",img:" + JSONObject.quote(b.second) + ",vid:" + JSONObject.quote(b.third) +
             "};var cur='web';function pick(k){cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
-            "document.getElementById('q').placeholder='Search the web';}" +
+            "document.getElementById('q').placeholder=(k==='web')?'Search the web':(k==='img'?'Search images':'Search videos');}" +
             "function go(){var v=document.getElementById('q').value.trim();if(!v){return false;}" +
             "if(cur==='web'&&/^(https?:\\/\\/\\S+|[\\w-]+(\\.[\\w-]+)+(\\/\\S*)?)$/i.test(v)){location.href=/^https?:/i.test(v)?v:'https://'+v;return false;}" +
             "location.href='rweb://s?k='+cur+'&q='+encodeURIComponent(v);return false;}" +
@@ -2915,6 +2956,8 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
     private fun openPhotoSearch() {
         hideSuggestions()
         val t = currentOrNull() ?: return
+        // Google Lens only offers its upload page to desktop browsers; navigate() switches this tab to the desktop
+        // identity for it (and back afterwards). Loading it directly with loadUrl() left it on the mobile identity.
         val url = if (searchBase().startsWith("https://www.bing.com")) "https://www.bing.com/visualsearch" else "https://lens.google.com/"
         navigate(t, url)
         toast("Choose or take a photo on the page")
@@ -3026,6 +3069,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         t.web.loadDataWithBaseURL("https://rweb.local/", VrViewer.HTML, "text/html", "utf-8", null)
     }
 
+    /** The address bar is hidden on the start page (it has its own search box) and in full-screen app mode. */
     private fun updateTopBar() {
         val t = currentOrNull()
         val onStartPage = t != null && t.url.isEmpty()
@@ -3188,6 +3232,8 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
             .show()
     }
 
+    // ---- History page (rweb://history): its own page with search, per-entry delete and "Clear all history" ----
+
     private var historyQuery = ""
 
     private fun openHistoryPage() {
@@ -3198,6 +3244,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
         )
     }
 
+    /** Re-draws the list inside the open History page, without adding another entry to the back stack. */
     private fun refreshHistoryPage(tab: Tab) {
         val body = HistoryPage.body(loadList("history"), historyQuery)
         tab.web.evaluateJavascript("document.body.innerHTML=" + JSONObject.quote(body) + ";", null)
@@ -3631,7 +3678,7 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
     private fun toggleDesktop() {
         val t = current()
         t.desktop = !t.desktop
-        t.autoDesktopSite = null
+        t.autoDesktopSite = null // the user's choice wins over the automatic one
         applyClientIdentity(t.web.settings, t.desktop, true)
         t.web.reload()
         toast(if (t.desktop) "Desktop site on" else "Desktop site off")
