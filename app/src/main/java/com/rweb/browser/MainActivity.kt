@@ -109,6 +109,8 @@ class MainActivity : ComponentActivity() {
         var pendingUrl: String? = null
         val blocked = AtomicInteger(0)
         var readerUrl: String? = null
+        // page address that already showed the "Reading mode available" prompt, so it is offered once per page
+        var readerOfferedFor: String? = null
         var httpFallback: String? = null
         // set while the tab runs the desktop identity only because the current site needs it (WhatsApp Web, Google Lens)
         var autoDesktopSite: String? = null
@@ -262,6 +264,7 @@ class MainActivity : ComponentActivity() {
     private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val handler = Handler(Looper.getMainLooper())
+    private var readerOfferView: View? = null
     private var mediaPlaying = false
     private var inBackground = false
     private var serviceOn = false
@@ -379,6 +382,9 @@ input{width:100%;padding:15px 20px;border-radius:28px;border:0;background:var(--
 .chips{margin-top:10px;gap:14px;flex-wrap:nowrap}
 .chip{flex:0 0 auto;padding:8px 16px;border-radius:18px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh);white-space:nowrap;scroll-snap-align:start}
 .chip.on{background:var(--acc);color:#fff}
+.frow{display:flex;gap:10px;margin:14px 16px 0}
+.fpill{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 10px;border-radius:22px;background:var(--fld);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh);text-decoration:none}
+.fpill .em{font-size:16px}
 .sec{margin:16px 10px 0;padding:14px 0 6px;border-top:1.5px solid var(--line);border-radius:18px}
 .s1,.s2,.s3,.s4,.s5{background:transparent}
 .nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 10px}
@@ -1109,6 +1115,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val prev = tabs.getOrNull(cur)
         cur = i
         hideSuggestions()
+        hideReaderOffer()
         content.removeAllViews()
         val t = tabs[i]
         if (prev != null && prev !== t) {
@@ -1403,7 +1410,10 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 tab.loading = true
                 tab.blocked.set(0)
-                if (tabs.getOrNull(cur) === tab) updateReloadButton()
+                if (tabs.getOrNull(cur) === tab) {
+                    updateReloadButton()
+                    hideReaderOffer()
+                }
                 val u = url ?: return
                 tab.url = displayUrl(u)
                 if (tabs.getOrNull(cur) === tab) updateTopBar()
@@ -1420,6 +1430,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
                     }
                 }
                 if (tabs.getOrNull(cur) === tab) updateReloadButton()
+                val finishedUrl = url ?: ""
+                if (tab.readerUrl == null && suggestReader() && finishedUrl.startsWith("http")) {
+                    val seenUrl = displayUrl(finishedUrl)
+                    handler.postDelayed({ checkReaderAvailable(tab, seenUrl) }, 1200)
+                }
                 val u = url ?: return
                 tab.url = displayUrl(u)
                 if (tabs.getOrNull(cur) === tab) updateTopBar()
@@ -1505,6 +1520,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
                         "voice" -> launchVoice()
                         "photo" -> openPhotoSearch()
                         "home" -> loadStart(tab.web)
+                        "newprivate" -> newTab(null, priv = true)
                         "toggle" -> {
                             val k = u.getQueryParameter("k")
                             val v = u.getQueryParameter("v") == "1"
@@ -1853,7 +1869,9 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
             "<span class=\"chip\" id=\"c-img\" onclick=\"pick('img')\">Images</span>" +
             "<span class=\"chip\" id=\"c-vid\" onclick=\"pick('vid')\">Videos</span>" +
             "<span class=\"chip\" onclick=\"location.href='rweb://voice'\">Voice</span>" +
-            "<span class=\"chip\" onclick=\"location.href='rweb://photo'\">Photo</span></div>"
+            "<span class=\"chip\" onclick=\"location.href='rweb://photo'\">Photo</span></div>" +
+            "<div class=\"frow\"><a class=\"fpill\" href=\"https://duck.ai\"><span class=\"em\">\u2728</span>AI Chat</a>" +
+            "<a class=\"fpill\" href=\"rweb://newprivate\"><span class=\"em\">\uD83D\uDD76\uFE0F</span>Private Tab</a></div>"
 
     private fun tileHtml(name: String, url: String, icons: Boolean): String {
         val host = Uri.parse(url).host ?: ""
@@ -3014,6 +3032,70 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         }.start()
     }
 
+    private fun suggestReader(): Boolean = prefs.getBoolean("reader_suggest", true)
+
+    private fun hideReaderOffer() {
+        readerOfferView?.let { v -> (v.parent as? ViewGroup)?.removeView(v) }
+        readerOfferView = null
+    }
+
+    /** Quietly checks whether the page looks like an article and, if so, offers reading mode once. */
+    private fun checkReaderAvailable(tab: Tab, urlAtFinish: String) {
+        if (isFinishing || isDestroyed) return
+        if (tabs.getOrNull(cur) !== tab || tab.readerUrl != null || tab.url != urlAtFinish) return
+        if (tab.readerOfferedFor == urlAtFinish) return
+        tab.web.evaluateJavascript(ReaderMode.DETECT_JS) { result ->
+            if (result == "true" && tabs.getOrNull(cur) === tab && tab.url == urlAtFinish && tab.readerUrl == null) {
+                tab.readerOfferedFor = urlAtFinish
+                showReaderOffer()
+            }
+        }
+    }
+
+    private fun showReaderOffer() {
+        hideReaderOffer()
+        val pill = LinearLayout(this)
+        pill.orientation = LinearLayout.HORIZONTAL
+        pill.gravity = Gravity.CENTER_VERTICAL
+        val bg = GradientDrawable()
+        bg.setColor(BAR)
+        bg.cornerRadius = dp(24).toFloat()
+        bg.setStroke(dp(1), ROSE)
+        pill.background = bg
+        pill.elevation = dp(8).toFloat()
+        pill.setPadding(dp(16), dp(6), dp(6), dp(6))
+        val label = TextView(this)
+        label.text = "Reading mode available"
+        label.textSize = 14f
+        label.setTextColor(INK)
+        pill.addView(label)
+        val open = stateChip("Open", true)
+        open.setOnClickListener {
+            hideReaderOffer()
+            toggleReader()
+        }
+        val openLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        openLp.leftMargin = dp(12)
+        pill.addView(open, openLp)
+        val close = TextView(this)
+        close.text = "\u2715"
+        close.textSize = 14f
+        close.setTextColor(MUTE)
+        close.contentDescription = "Dismiss"
+        close.setPadding(dp(12), dp(8), dp(12), dp(8))
+        close.setOnClickListener { hideReaderOffer() }
+        pill.addView(close)
+        val lp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        )
+        lp.bottomMargin = dp(16)
+        content.addView(pill, lp)
+        readerOfferView = pill
+        handler.postDelayed({ if (readerOfferView === pill) hideReaderOffer() }, 10000)
+    }
+
     private fun toggleReader() {
         val t = currentOrNull() ?: return
         val original = t.readerUrl
@@ -3064,7 +3146,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         runIo {
             try {
                 val file = File(filesDir, "offline_" + url.hashCode() + ".html")
-                val fullDoc = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>${esc(title)}</title></head><body><h1>${esc(title)}</h1>$contentHtml</body></html>"
+                val fullDoc = ReaderMode.page(title, "", contentHtml)
                 file.writeText(fullDoc)
                 trimOfflineCache()
             } catch (e: Exception) {
@@ -4191,6 +4273,9 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
                 MenuHeader("Display"),
                 MenuRow("Page text size", getTextZoom().toString() + "%", false) { chooseTextSize() },
                 MenuRow("Toolbars", if (barsHidden) "Hidden" else "Visible", false, true) { setBarsHidden(!barsHidden) },
+                MenuRow("Suggest reading mode", if (suggestReader()) "On" else "Off", false, true) {
+                    prefs.edit().putBoolean("reader_suggest", !suggestReader()).apply()
+                },
                 MenuHeader("Advanced"),
                 MenuRow("Export / Import JSON", null, false) { showJsonExportImport() },
                 MenuRow("Scan QR code", null, false) { launchQrScanner() },
