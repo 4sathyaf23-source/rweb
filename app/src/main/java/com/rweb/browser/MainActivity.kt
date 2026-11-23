@@ -119,17 +119,19 @@ class MainActivity : ComponentActivity() {
         var autoDesktopSite: String? = null
     }
 
-    // Obsidian & Electric Violet palette
-    private val BG = Color.parseColor("#090A0F")      // pitch-dark obsidian canvas
-    private val BAR = Color.parseColor("#131622")     // elevated graphite cards, bars, pills
-    private val ROSE = Color.parseColor("#8B5CF6")    // electric violet accent, active highlights, links
-    private val INK = Color.parseColor("#F4F4F9")     // crisp off-white primary text
-    private val MUTE = Color.parseColor("#949AB0")    // cool slate-grey secondary text
-    private val PRIV = Color.parseColor("#18132B")    // deep violet-obsidian for private tabs
+    // Obsidian, Graphite, Royal Blue & Sky Blue palette
+    private val BG = Color.parseColor("#090A0F")       // pitch-dark obsidian canvas
+    private val BAR = Color.parseColor("#131622")      // elevated graphite cards, bars, pills
+    private val ROYAL = Color.parseColor("#2563EB")    // deeper royal blue for solid buttons & CTAs
+    private val SKY = Color.parseColor("#38BDF8")      // brighter sky blue for highlights, focus rings & indicators
+    private val INK = Color.parseColor("#F3F4F6")      // crisp off-white primary text
+    private val MUTE = Color.parseColor("#9CA3AF")     // cool slate-grey secondary text
+    private val PRIV = Color.parseColor("#0F172A")     // deep midnight-navy for private tabs
 
     private val tabs = mutableListOf<Tab>()
     private var cur = -1
     private lateinit var address: EditText
+    private lateinit var pillBox: LinearLayout
     private lateinit var progress: ProgressBar
     private lateinit var content: FrameLayout
     private lateinit var tabBtn: TextView
@@ -379,22 +381,22 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        // Stylized "d" emblem for diddu in Obsidian & Electric Violet
-        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="var(--acc)" stroke-width="1.8" stroke-opacity="0.45"/><path d="M14.75 6.5v11M14.75 13.75a3.75 3.75 0 1 1 0-4.5" stroke="var(--acc)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.5" cy="7.25" r="1.25" fill="var(--acc)"/></svg>"""
+        // Stylized "d" emblem for diddu in Obsidian, Royal Blue & Sky Blue
+        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="var(--sky)" stroke-width="1.8" stroke-opacity="0.45"/><path d="M14.75 6.5v11M14.75 13.75a3.75 3.75 0 1 1 0-4.5" stroke="var(--sky)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.5" cy="7.25" r="1.25" fill="var(--royal)"/></svg>"""
 
-        // Obsidian & Electric Violet start page theme
+        // Obsidian & Graphite start page with Deeper Royal Blue (#2563EB) solid buttons and Brighter Sky Blue (#38BDF8) highlights/focus rings
         const val START_CSS = """
-:root{--bg:#F8F7FC;--fg:#14151F;--mute:#5E6378;--card:#FFFFFF;--fld:#EFEDF7;--acc:#7C3AED;--acc-ink:#FFFFFF;--sh:0 6px 18px rgba(15,17,28,.08);--line:rgba(124,58,237,.16);--chip-bdr:rgba(124,58,237,.18)}
-html.dark{--bg:#090A0F;--fg:#F4F4F9;--mute:#949AB0;--card:#131622;--fld:#131622;--acc:#8B5CF6;--acc-ink:#FFFFFF;--sh:0 8px 24px rgba(0,0,0,.55),0 0 0 1px rgba(139,92,246,.12);--line:rgba(139,92,246,.22);--chip-bdr:rgba(255,255,255,.08)}
+:root{--bg:#F8FAFC;--fg:#0F172A;--mute:#64748B;--card:#FFFFFF;--fld:#EEF2F6;--royal:#2563EB;--sky:#0284C7;--sky-tint:rgba(2,132,199,.14);--acc-ink:#FFFFFF;--sh:0 6px 18px rgba(15,23,42,.08);--line:rgba(37,99,235,.16);--chip-bdr:rgba(15,23,42,.12)}
+html.dark{--bg:#090A0F;--fg:#F3F4F6;--mute:#9CA3AF;--card:#131622;--fld:#131622;--royal:#2563EB;--sky:#38BDF8;--sky-tint:rgba(56,189,248,.14);--acc-ink:#FFFFFF;--sh:0 8px 24px rgba(0,0,0,.55),0 0 0 1px rgba(31,36,51,.9);--line:rgba(56,189,248,.22);--chip-bdr:#1F2433}
 *{box-sizing:border-box}
 body{margin:0 auto;padding:max(20px,4vh) 0 44px;max-width:560px;background:var(--bg);color:var(--fg);font-family:sans-serif}
 .brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;white-space:nowrap}
 .logo{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:var(--fld);border:1px solid var(--line);box-shadow:var(--sh);flex:0 0 auto}
 .logo svg{width:26px;height:26px}
-h1{color:var(--acc);font-size:32px;margin:0;line-height:1;letter-spacing:-.02em}
+h1{color:var(--sky);font-size:32px;margin:0;line-height:1;letter-spacing:-.02em}
 .sf{margin:0 16px;position:relative}
-input{width:100%;padding:15px 86px 15px 20px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}
-input:focus{border-color:var(--acc)}
+input{width:100%;padding:15px 86px 15px 20px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none;transition:border-color .18s ease,box-shadow .18s ease}
+input:focus{border-color:var(--sky);box-shadow:0 0 0 3px var(--sky-tint)}
 .sic{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px}
 .sic-cam{right:46px}
 .sic-mic{right:8px}
@@ -404,35 +406,40 @@ input:focus{border-color:var(--acc)}
 .hrow::-webkit-scrollbar,.vrow::-webkit-scrollbar,.cchips::-webkit-scrollbar{display:none}
 .chips{margin-top:12px;gap:10px;flex-wrap:nowrap}
 .chip{flex:0 0 auto;padding:8px 16px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:13px;font-weight:500;box-shadow:var(--sh);white-space:nowrap;scroll-snap-align:start}
-.chip.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600;box-shadow:0 6px 18px rgba(139,92,246,.35)}
+.chip.on{background:var(--royal);border-color:var(--sky);color:var(--acc-ink);font-weight:600;box-shadow:0 6px 18px rgba(37,99,235,.4)}
 .frow{display:flex;gap:10px;margin:14px 16px 0}
 .fpill{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 12px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh);text-decoration:none}
+.fpill:active{border-color:var(--sky)}
 .fpill .em{font-size:16px}
 .sec{margin:18px 12px 0;padding:14px 0 6px;border-top:1px solid var(--line);border-radius:18px}
 .s1,.s2,.s3,.s4,.s5{background:transparent}
 .nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 10px}
-.nh a{color:var(--acc);text-decoration:none;text-transform:none;letter-spacing:0;margin-left:auto;font-weight:600}
+.nh a{color:var(--sky);text-decoration:none;text-transform:none;letter-spacing:0;margin-left:auto;font-weight:600}
 summary.nh{list-style:none;cursor:pointer;margin:0}
 summary.nh::-webkit-details-marker{display:none}
-summary.nh::after{content:"\25BE";font-size:14px;margin-left:10px;color:var(--acc)}
-details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc)}
+summary.nh::after{content:"\25BE";font-size:14px;margin-left:10px;color:var(--sky)}
+details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky)}
 .hint{padding:0 16px 8px;color:var(--mute);font-size:13px}
 .tile{flex:0 0 84px;text-decoration:none;color:var(--fg);text-align:center;font-size:13px;scroll-snap-align:start}
-.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:999px;background:var(--fld);border:1px solid var(--chip-bdr);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}
-.ic img{position:absolute;top:0;left:0;width:100%;height:100%;padding:12px;background:#F4F4F9;object-fit:contain}
+.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:999px;background:var(--fld);border:1px solid var(--chip-bdr);color:var(--sky);font-size:22px;font-weight:700;box-shadow:var(--sh);transition:border-color .15s ease}
+.tile:active .ic,.tile:hover .ic{border-color:var(--sky)}
+.ic img{position:absolute;top:0;left:0;width:100%;height:100%;padding:12px;background:#F3F4F6;object-fit:contain}
 .nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 2px}
 .rs{flex:0 0 auto;max-width:220px;padding:9px 16px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--card);box-shadow:var(--sh);color:var(--fg);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;scroll-snap-align:start}
+.rs:active{border-color:var(--sky)}
 .vc{flex:0 0 236px;text-decoration:none;color:var(--fg);scroll-snap-align:start}
 .vt{position:relative;width:236px;height:132px;border-radius:16px;border:1px solid var(--chip-bdr);overflow:hidden;background:var(--card);box-shadow:var(--sh)}
+.vc:active .vt,.vc:hover .vt{border-color:var(--sky)}
 .vt img{width:100%;height:100%;object-fit:cover;display:block}
-.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:999px;background:rgba(139,92,246,.82);border:1px solid rgba(255,255,255,.22);color:#fff;text-align:center;line-height:42px;font-size:16px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:999px;background:rgba(37,99,235,.88);border:1px solid var(--sky);color:#fff;text-align:center;line-height:42px;font-size:16px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 .vn{font-size:14px;line-height:1.32;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
 .nw{flex:0 0 244px;display:block;background:var(--card);border:1px solid var(--chip-bdr);border-radius:16px;overflow:hidden;box-shadow:var(--sh);color:var(--fg);text-decoration:none;scroll-snap-align:start}
+.nw:active,.nw:hover{border-color:var(--sky)}
 .nw .ni{width:100%;height:132px;object-fit:cover;display:block}
 .nw .nt{display:-webkit-box;padding:10px 12px;font-size:14px;line-height:1.35;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
 .cchips{display:flex;gap:8px;overflow-x:auto;padding:4px 16px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .cchip{flex:0 0 auto;padding:6px 14px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:12px;font-weight:500;box-shadow:var(--sh);white-space:nowrap}
-.cchip.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600;box-shadow:0 4px 14px rgba(139,92,246,.32)}
+.cchip.on{background:var(--royal);border-color:var(--sky);color:var(--acc-ink);font-weight:600;box-shadow:0 4px 14px rgba(37,99,235,.38)}
 """
     }
 
@@ -868,7 +875,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         top.setBackgroundColor(BAR)
         top.setPadding(dp(12), dp(8), dp(12), dp(10))
 
-        val pillBox = LinearLayout(this)
+        pillBox = LinearLayout(this)
         pillBox.orientation = LinearLayout.HORIZONTAL
         pillBox.gravity = Gravity.CENTER_VERTICAL
         pillBox.background = surfaceDrawable(BG, 24f, HAIRLINE, 1)
@@ -897,6 +904,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
             }
         })
         address.setOnFocusChangeListener { _, focused ->
+            pillBox.background = if (focused) {
+                surfaceDrawable(BG, 24f, SKY, 2)
+            } else {
+                surfaceDrawable(BG, 24f, HAIRLINE, 1)
+            }
             if (focused) refreshSuggestions(address.text.toString()) else hideSuggestions()
         }
         address.setOnEditorActionListener { _, actionId, event ->
@@ -924,12 +936,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
         progress.max = 100
-        progress.progressTintList = ColorStateList.valueOf(ROSE)
+        progress.progressTintList = ColorStateList.valueOf(SKY)
         progress.visibility = View.GONE
 
         content = FrameLayout(this)
 
-        bottomBg = surfaceDrawable(BAR, 28f, VIOLET_GLOW, 1)
+        bottomBg = surfaceDrawable(BAR, 28f, SKY_GLOW, 1)
         val island = LinearLayout(this)
         island.orientation = LinearLayout.HORIZONTAL
         island.gravity = Gravity.CENTER_VERTICAL
@@ -956,8 +968,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         tabBtn.setTextColor(INK)
         tabBtn.gravity = Gravity.CENTER
         val tabBox = GradientDrawable()
-        tabBox.setColor(VIOLET_TINT)
-        tabBox.setStroke(dp(2), ROSE)
+        tabBox.setColor(SKY_TINT)
+        tabBox.setStroke(dp(2), SKY)
         tabBox.cornerRadius = dp(999).toFloat()
         tabBtn.background = tabBox
         island.addView(cell(tabBtn, 28, "Tabs") { showTabs() }, LinearLayout.LayoutParams(0, dp(48), 1f))
@@ -979,7 +991,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         suggestBox.orientation = LinearLayout.VERTICAL
         val sbBg = GradientDrawable()
         sbBg.setColor(SHEET)
-        sbBg.setStroke(dp(1), HAIRLINE)
+        sbBg.setStroke(dp(1), SKY_GLOW)
         val sr = dp(20).toFloat()
         sbBg.cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, sr, sr, sr, sr)
         suggestBox.background = sbBg
@@ -1000,7 +1012,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         floatMenu = icon("menu", INK)
         floatMenu.setPadding(dp(10), dp(10), dp(10), dp(10))
         floatMenu.contentDescription = "Menu"
-        floatMenu.background = surfaceDrawable(0xE6131622.toInt(), 999f, VIOLET_GLOW, 1)
+        floatMenu.background = surfaceDrawable(Color.argb(0xE6, Color.red(BAR), Color.green(BAR), Color.blue(BAR)), 999f, SKY_GLOW, 1)
         floatMenu.elevation = dp(8).toFloat()
         floatMenu.visibility = View.GONE
         floatMenu.setOnClickListener { showMenu() }
@@ -1130,7 +1142,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         var color = MUTE
         val kind = when {
             t.url.startsWith("https://") -> {
-                color = ROSE
+                color = SKY
                 "lock"
             }
             t.url.startsWith("http://") -> {
@@ -1138,7 +1150,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
                 "warning"
             }
             t.priv -> {
-                color = ROSE
+                color = SKY
                 "shield"
             }
             else -> "search"
@@ -2164,8 +2176,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
 
     private fun privateHtml(): String =
         homeHead(true, siteIcons()) +
-            "<div class=\"sec\" style=\"text-align:center;color:#949AB0;font-size:14px;line-height:1.5;padding:0 24px\">" +
-            "<b style=\"color:#8B5CF6\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
+            "<div class=\"sec\" style=\"text-align:center;color:#9CA3AF;font-size:14px;line-height:1.5;padding:0 24px\">" +
+            "<b style=\"color:#38BDF8\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
             "Bookmarks can't be saved from private tabs. Downloads from private tabs are deleted when you close the last private tab.</div>" +
             searchScript() + "</body></html>"
 
@@ -2803,8 +2815,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         badge.gravity = Gravity.CENTER
         badge.textSize = 15f
         badge.setTypeface(badge.typeface, Typeface.BOLD)
-        badge.setTextColor(ROSE)
-        badge.background = surfaceDrawable(BG, 999f, VIOLET_GLOW, 1)
+        badge.setTextColor(SKY)
+        badge.background = surfaceDrawable(BG, 999f, SKY_GLOW, 1)
         badge.text = label.trim().take(1).uppercase().ifEmpty { "★" }
         row.addView(badge, LinearLayout.LayoutParams(dp(42), dp(42)))
 
@@ -2893,19 +2905,19 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
                 for ((idx, cv) in chipViews.withIndex()) {
                     val on = cats[idx] == activeCat
                     cv.background = surfaceDrawable(
-                        if (on) ROSE else BAR,
+                        if (on) ROYAL else BAR,
                         999f,
-                        if (on) ROSE else HAIRLINE,
+                        if (on) SKY else HAIRLINE,
                         1
                     )
-                    cv.setTextColor(if (on) INK else MUTE)
+                    cv.setTextColor(if (on) Color.WHITE else MUTE)
                     cv.setTypeface(cv.typeface, if (on) Typeface.BOLD else Typeface.NORMAL)
                 }
                 renderFn()
             }
             val on = cat == activeCat
-            chip.background = surfaceDrawable(if (on) ROSE else BAR, 999f, if (on) ROSE else HAIRLINE, 1)
-            chip.setTextColor(if (on) INK else MUTE)
+            chip.background = surfaceDrawable(if (on) ROYAL else BAR, 999f, if (on) SKY else HAIRLINE, 1)
+            chip.setTextColor(if (on) Color.WHITE else MUTE)
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             lp.rightMargin = dp(6)
             chipRow.addView(chip, lp)
@@ -2968,8 +2980,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         badge.gravity = Gravity.CENTER
         badge.textSize = 11f
         badge.setTypeface(badge.typeface, Typeface.BOLD)
-        badge.setTextColor(ROSE)
-        badge.background = surfaceDrawable(BG, 999f, VIOLET_GLOW, 1)
+        badge.setTextColor(SKY)
+        badge.background = surfaceDrawable(BG, 999f, SKY_GLOW, 1)
         val ext = item.title.substringAfterLast('.', "").take(4).uppercase()
         badge.text = if (ext.isEmpty()) "FILE" else ext
         row.addView(badge, LinearLayout.LayoutParams(dp(42), dp(42)))
@@ -2986,14 +2998,14 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         val sub = TextView(this)
         sub.text = Downloads.describe(item)
         sub.textSize = 12f
-        sub.setTextColor(if (item.status == DownloadManager.STATUS_FAILED) ROSE else MUTE)
+        sub.setTextColor(if (item.status == DownloadManager.STATUS_FAILED) Color.parseColor("#F87171") else MUTE)
         col.addView(name)
         col.addView(sub)
         if (item.running && item.total > 0) {
             val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
             bar.max = 100
             bar.progress = item.percent
-            bar.progressTintList = ColorStateList.valueOf(ROSE)
+            bar.progressTintList = ColorStateList.valueOf(SKY)
             val barLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4))
             barLp.topMargin = dp(6)
             col.addView(bar, barLp)
@@ -3158,7 +3170,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         val pill = LinearLayout(this)
         pill.orientation = LinearLayout.HORIZONTAL
         pill.gravity = Gravity.CENTER_VERTICAL
-        pill.background = surfaceDrawable(BAR, 999f, ROSE, 1)
+        pill.background = surfaceDrawable(BAR, 999f, SKY, 1)
         pill.elevation = dp(10).toFloat()
         pill.setPadding(dp(16), dp(6), dp(6), dp(6))
         val label = TextView(this)
@@ -3166,10 +3178,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         label.textSize = 14f
         label.setTextColor(INK)
         pill.addView(label)
-        val open = stateChip("Open", true)
-        open.setOnClickListener {
+        val open = pillButton("Open", true) {
             hideReaderOffer()
             toggleReader()
+        }.apply {
+            textSize = 12f
+            setPadding(dp(14), dp(6), dp(14), dp(6))
         }
         val openLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         openLp.leftMargin = dp(12)
@@ -3585,7 +3599,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         c.drawCircle(size / 2f, size / 2f, size / 2f, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 6f
-        paint.color = ROSE
+        paint.color = SKY
         c.drawCircle(size / 2f, size / 2f, size / 2f - 3f, paint)
         paint.style = Paint.Style.FILL
         paint.color = INK
@@ -3793,14 +3807,14 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
     }
 
     private val SHEET = Color.parseColor("#131622")
-    private val HAIRLINE = Color.parseColor("#24283A")
-    private val VIOLET_GLOW = Color.parseColor("#668B5CF6")
-    private val VIOLET_TINT = Color.parseColor("#298B5CF6")
+    private val HAIRLINE = Color.parseColor("#1F2433")
+    private val SKY_GLOW = Color.parseColor("#6638BDF8")
+    private val SKY_TINT = Color.parseColor("#2438BDF8")
 
     private fun dlg(): AlertDialog.Builder =
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
 
-    private fun ripple(): Drawable = RippleDrawable(ColorStateList.valueOf(VIOLET_GLOW), null, null)
+    private fun ripple(): Drawable = RippleDrawable(ColorStateList.valueOf(SKY_GLOW), null, null)
 
     private fun icon(kind: String, color: Int): ImageView {
         val iv = ImageView(this)
@@ -3825,7 +3839,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         box.orientation = LinearLayout.VERTICAL
         val bg = GradientDrawable()
         bg.setColor(SHEET)
-        bg.setStroke(dp(1), VIOLET_GLOW)
+        bg.setStroke(dp(1), SKY_GLOW)
         val r = dp(24).toFloat()
         bg.cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
         box.background = bg
@@ -3866,11 +3880,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         c.text = label
         c.textSize = 11f
         c.setTypeface(c.typeface, Typeface.BOLD)
-        c.setTextColor(INK)
+        c.setTextColor(if (on) SKY else MUTE)
         c.background = surfaceDrawable(
-            if (on) ROSE else VIOLET_TINT,
+            if (on) SKY_TINT else BAR,
             999f,
-            if (on) ROSE else VIOLET_GLOW,
+            if (on) SKY else HAIRLINE,
             1
         )
         c.setPadding(dp(12), dp(5), dp(12), dp(5))
@@ -3882,12 +3896,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         b.text = label
         b.textSize = 14f
         b.setTypeface(b.typeface, Typeface.BOLD)
-        b.setTextColor(INK)
+        b.setTextColor(if (accent) Color.WHITE else INK)
         b.gravity = Gravity.CENTER
         b.background = surfaceDrawable(
-            if (accent) ROSE else BAR,
+            if (accent) ROYAL else BAR,
             999f,
-            if (accent) ROSE else HAIRLINE,
+            if (accent) SKY else HAIRLINE,
             1
         )
         b.setPadding(dp(16), dp(11), dp(16), dp(11))
@@ -3911,8 +3925,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        val fill = if (highlight) VIOLET_TINT else BAR
-        val stroke = if (highlight) ROSE else HAIRLINE
+        val fill = if (highlight) SKY_TINT else BAR
+        val stroke = if (highlight) SKY else HAIRLINE
         row.background = surfaceDrawable(fill, 18f, stroke, 1)
         row.setPadding(dp(14), dp(12), dp(if (trailing != null) 8 else 14), dp(12))
         if (onClick != null) row.setOnClickListener { onClick() }
@@ -3972,7 +3986,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         val (d, _, list) = listSheet(title)
         for ((i, label) in items.withIndex()) {
             val on = i == selected
-            val check = if (on) icon("check", ROSE).apply { layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)) } else null
+            val check = if (on) icon("check", SKY).apply { layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)) } else null
             list.addView(cardRow(label, null, check, on) {
                 d.dismiss()
                 onPick(i)
@@ -4066,12 +4080,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         row.gravity = Gravity.CENTER_VERTICAL
         val fill = when {
             t.priv -> PRIV
-            selected -> VIOLET_TINT
+            selected -> SKY_TINT
             else -> BAR
         }
         val stroke = when {
-            selected -> ROSE
-            t.priv -> VIOLET_GLOW
+            selected -> SKY
+            t.priv -> SKY_GLOW
             else -> HAIRLINE
         }
         row.background = surfaceDrawable(fill, 18f, stroke, if (selected) 2 else 1)
@@ -4082,8 +4096,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         badge.gravity = Gravity.CENTER
         badge.textSize = 14f
         badge.setTypeface(badge.typeface, Typeface.BOLD)
-        badge.setTextColor(if (t.priv || selected) ROSE else INK)
-        badge.background = surfaceDrawable(BG, 999f, if (selected) ROSE else HAIRLINE, 1)
+        badge.setTextColor(if (t.priv || selected) SKY else INK)
+        badge.background = surfaceDrawable(BG, 999f, if (selected) SKY else HAIRLINE, 1)
         badge.text = if (t.priv) "\uD83D\uDD76" else (t.title.trim().take(1).uppercase().ifEmpty { "d" })
         row.addView(badge, LinearLayout.LayoutParams(dp(40), dp(40)))
 
@@ -4143,7 +4157,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
             h.text = text.uppercase()
             h.textSize = 11f
             h.letterSpacing = 0.08f
-            h.setTextColor(ROSE)
+            h.setTextColor(SKY)
             h.setTypeface(h.typeface, Typeface.BOLD)
             h.setPadding(dp(8), dp(14), dp(8), dp(6))
             list.addView(h)
@@ -4241,8 +4255,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
             action()
         }
         val circle = FrameLayout(this)
-        circle.background = surfaceDrawable(BAR, 999f, VIOLET_GLOW, 1)
-        circle.addView(icon(kind, ROSE), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        circle.background = surfaceDrawable(BAR, 999f, SKY_GLOW, 1)
+        circle.addView(icon(kind, SKY), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
         col.addView(circle, LinearLayout.LayoutParams(dp(50), dp(50)))
         val t = TextView(this)
         t.text = label
@@ -4261,7 +4275,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         val hasLog = crashFile.exists() && crashFile.length() > 0L
 
         fun item(kind: String, title: String, sub: String, onClick: () -> Unit) {
-            val ic = icon(kind, ROSE).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
+            val ic = icon(kind, SKY).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
             list.addView(cardRow(title, sub, ic, false) {
                 d.dismiss()
                 onClick()
@@ -4414,7 +4428,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         box.addView(sub)
 
         val card = FrameLayout(this)
-        card.background = surfaceDrawable(Color.WHITE, 20f, VIOLET_GLOW, 2)
+        card.background = surfaceDrawable(Color.WHITE, 20f, SKY_GLOW, 2)
         card.setPadding(dp(16), dp(16), dp(16), dp(16))
         val iv = ImageView(this)
         iv.setImageBitmap(bmp)
@@ -4448,7 +4462,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         sheetTitle(box, "Clear browsing data")
 
         for (i in labels.indices) {
-            val check = icon("check", ROSE).apply {
+            val check = icon("check", SKY).apply {
                 layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
                 visibility = if (checked[i]) View.VISIBLE else View.INVISIBLE
             }
@@ -4457,9 +4471,9 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
                 checked[i] = !checked[i]
                 check.visibility = if (checked[i]) View.VISIBLE else View.INVISIBLE
                 row.background = surfaceDrawable(
-                    if (checked[i]) VIOLET_TINT else BAR,
+                    if (checked[i]) SKY_TINT else BAR,
                     18f,
-                    if (checked[i]) ROSE else HAIRLINE,
+                    if (checked[i]) SKY else HAIRLINE,
                     1
                 )
             }
@@ -4544,12 +4558,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
             val badge = TextView(this)
             badge.text = "Last backed up " + stamp
             badge.textSize = 12f
-            badge.setTextColor(ROSE)
+            badge.setTextColor(SKY)
             badge.setPadding(dp(4), 0, dp(4), dp(12))
             box.addView(badge)
         }
 
-        val bkIcon = icon("cloud", ROSE).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
+        val bkIcon = icon("cloud", SKY).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
         box.addView(cardRow("Back up now", "Upload a fresh copy to Google Drive", bkIcon, true) {
             d.dismiss()
             beginDriveAction(DriveAction.BACKUP)
@@ -4775,10 +4789,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
                 onToggle()
                 val on = state()
                 chip.text = label(on)
+                chip.setTextColor(if (on) SKY else MUTE)
                 chip.background = surfaceDrawable(
-                    if (on) ROSE else VIOLET_TINT,
+                    if (on) SKY_TINT else BAR,
                     999f,
-                    if (on) ROSE else VIOLET_GLOW,
+                    if (on) SKY else HAIRLINE,
                     1
                 )
             }
@@ -4814,11 +4829,13 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
                     if (next == "allow") GeolocationPermissions.getInstance().allow(origin)
                     else GeolocationPermissions.getInstance().clear(origin)
                 }
+                val allow = next == "allow"
                 chip.text = next.uppercase()
+                chip.setTextColor(if (allow) SKY else MUTE)
                 chip.background = surfaceDrawable(
-                    if (next == "allow") ROSE else VIOLET_TINT,
+                    if (allow) SKY_TINT else BAR,
                     999f,
-                    if (next == "allow") ROSE else VIOLET_GLOW,
+                    if (allow) SKY else HAIRLINE,
                     1
                 )
             }
