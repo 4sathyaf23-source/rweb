@@ -78,7 +78,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -120,12 +119,13 @@ class MainActivity : ComponentActivity() {
         var autoDesktopSite: String? = null
     }
 
-    private val BG = Color.parseColor("#0A1930")      // deep blue: app background
-    private val BAR = Color.parseColor("#122A4D")      // blue: toolbars, cards, fields
-    private val ROSE = Color.parseColor("#2DD4BF")     // teal: accent, links, selected state
-    private val INK = Color.parseColor("#EAF3FF")      // near-white, cool blue tint: primary text
-    private val MUTE = Color.parseColor("#9EB4CF")     // blue-grey: secondary text
-    private val PRIV = Color.parseColor("#0F2E22")     // deep green: private-tab chrome
+    // Obsidian & Electric Violet palette
+    private val BG = Color.parseColor("#090A0F")      // pitch-dark obsidian canvas
+    private val BAR = Color.parseColor("#131622")     // elevated graphite cards, bars, pills
+    private val ROSE = Color.parseColor("#8B5CF6")    // electric violet accent, active highlights, links
+    private val INK = Color.parseColor("#F4F4F9")     // crisp off-white primary text
+    private val MUTE = Color.parseColor("#949AB0")    // cool slate-grey secondary text
+    private val PRIV = Color.parseColor("#18132B")    // deep violet-obsidian for private tabs
 
     private val tabs = mutableListOf<Tab>()
     private var cur = -1
@@ -381,56 +381,57 @@ class MainActivity : ComponentActivity() {
 
         const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>"""
 
-        // Start page styles. Every section has spacing, a top border divider, and its own tinted block.
+        // Obsidian & Electric Violet start page theme
         const val START_CSS = """
-:root{--bg:#FFFFFF;--fg:#202124;--mute:#5F6368;--card:#F8F9FA;--fld:#F1F3F4;--acc:#0D9488;--sh:0 4px 14px rgba(0,0,0,.08);--line:rgba(13,148,136,.15);--t1:#FFF8F9;--t2:#F7FAFF;--t3:#F8FCF9;--t4:#FFFBF3;--t5:#F9F7FF}
-html.dark{--bg:#0A1930;--fg:#EAF3FF;--mute:#9EB4CF;--card:#122A4D;--fld:#122A4D;--acc:#2DD4BF;--sh:0 4px 14px rgba(0,0,0,.35);--line:rgba(45,212,191,.24);--t1:#0D2240;--t2:#0D2240;--t3:#0D2240;--t4:#0D2240;--t5:#0D2240}
+:root{--bg:#F8F7FC;--fg:#14151F;--mute:#5E6378;--card:#FFFFFF;--fld:#EFEDF7;--acc:#7C3AED;--acc-ink:#FFFFFF;--sh:0 6px 18px rgba(15,17,28,.08);--line:rgba(124,58,237,.16);--chip-bdr:rgba(124,58,237,.18)}
+html.dark{--bg:#090A0F;--fg:#F4F4F9;--mute:#949AB0;--card:#131622;--fld:#131622;--acc:#8B5CF6;--acc-ink:#FFFFFF;--sh:0 8px 24px rgba(0,0,0,.55),0 0 0 1px rgba(139,92,246,.12);--line:rgba(139,92,246,.22);--chip-bdr:rgba(255,255,255,.08)}
 *{box-sizing:border-box}
-body{margin:0 auto;padding:max(20px,4vh) 0 40px;max-width:560px;background:var(--bg);color:var(--fg);font-family:sans-serif}
+body{margin:0 auto;padding:max(20px,4vh) 0 44px;max-width:560px;background:var(--bg);color:var(--fg);font-family:sans-serif}
 .brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;white-space:nowrap}
-.logo{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--fld);box-shadow:var(--sh);flex:0 0 auto}
+.logo{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:var(--fld);border:1px solid var(--line);box-shadow:var(--sh);flex:0 0 auto}
 .logo svg{width:26px;height:26px}
-h1{color:var(--acc);font-size:32px;margin:0;line-height:1}
+h1{color:var(--acc);font-size:32px;margin:0;line-height:1;letter-spacing:-.02em}
 .sf{margin:0 16px;position:relative}
-input{width:100%;padding:15px 86px 15px 20px;border-radius:28px;border:0;background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}
-.sic{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px}
+input{width:100%;padding:15px 86px 15px 20px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none}
+input:focus{border-color:var(--acc)}
+.sic{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px}
 .sic-cam{right:46px}
 .sic-mic{right:8px}
 .sic-eng{left:10px;width:22px;height:22px}
-.sic-eng img{width:22px;height:22px;border-radius:4px}
-.hrow,.vrow{display:flex;gap:16px;overflow-x:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none}
+.sic-eng img{width:22px;height:22px;border-radius:999px}
+.hrow,.vrow{display:flex;gap:14px;overflow-x:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none}
 .hrow::-webkit-scrollbar,.vrow::-webkit-scrollbar,.cchips::-webkit-scrollbar{display:none}
-.chips{margin-top:10px;gap:14px;flex-wrap:nowrap}
-.chip{flex:0 0 auto;padding:8px 16px;border-radius:18px;background:var(--fld);color:var(--fg);font-size:13px;box-shadow:var(--sh);white-space:nowrap;scroll-snap-align:start}
-.chip.on{background:var(--acc);color:#fff}
+.chips{margin-top:12px;gap:10px;flex-wrap:nowrap}
+.chip{flex:0 0 auto;padding:8px 16px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:13px;font-weight:500;box-shadow:var(--sh);white-space:nowrap;scroll-snap-align:start}
+.chip.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600;box-shadow:0 6px 18px rgba(139,92,246,.35)}
 .frow{display:flex;gap:10px;margin:14px 16px 0}
-.fpill{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 10px;border-radius:22px;background:var(--fld);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh);text-decoration:none}
+.fpill{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 12px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh);text-decoration:none}
 .fpill .em{font-size:16px}
-.sec{margin:16px 10px 0;padding:14px 0 6px;border-top:1.5px solid var(--line);border-radius:18px}
+.sec{margin:18px 12px 0;padding:14px 0 6px;border-top:1px solid var(--line);border-radius:18px}
 .s1,.s2,.s3,.s4,.s5{background:transparent}
-.nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 10px}
-.nh a{color:var(--acc);text-decoration:none;text-transform:none;letter-spacing:0;margin-left:auto}
+.nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 10px}
+.nh a{color:var(--acc);text-decoration:none;text-transform:none;letter-spacing:0;margin-left:auto;font-weight:600}
 summary.nh{list-style:none;cursor:pointer;margin:0}
 summary.nh::-webkit-details-marker{display:none}
-summary.nh::after{content:"\25BE";font-size:14px;margin-left:10px}
-details[open] summary.nh::after{content:"\25B4";margin-left:10px}
+summary.nh::after{content:"\25BE";font-size:14px;margin-left:10px;color:var(--acc)}
+details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc)}
 .hint{padding:0 16px 8px;color:var(--mute);font-size:13px}
-.tile{flex:0 0 86px;text-decoration:none;color:var(--fg);text-align:center;font-size:13px;scroll-snap-align:start}
-.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:50%;background:var(--fld);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}
-.ic img{position:absolute;top:0;left:0;width:100%;height:100%;padding:13px;background:#FFFFFF;object-fit:contain}
+.tile{flex:0 0 84px;text-decoration:none;color:var(--fg);text-align:center;font-size:13px;scroll-snap-align:start}
+.ic{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 8px;border-radius:999px;background:var(--fld);border:1px solid var(--chip-bdr);color:var(--acc);font-size:22px;font-weight:700;box-shadow:var(--sh)}
+.ic img{position:absolute;top:0;left:0;width:100%;height:100%;padding:12px;background:#F4F4F9;object-fit:contain}
 .nm{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 2px}
-.rs{flex:0 0 auto;max-width:220px;padding:10px 18px;border-radius:18px;background:var(--card);box-shadow:var(--sh);color:var(--fg);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;scroll-snap-align:start}
+.rs{flex:0 0 auto;max-width:220px;padding:9px 16px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--card);box-shadow:var(--sh);color:var(--fg);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;scroll-snap-align:start}
 .vc{flex:0 0 236px;text-decoration:none;color:var(--fg);scroll-snap-align:start}
-.vt{position:relative;width:236px;height:132px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:var(--sh)}
+.vt{position:relative;width:236px;height:132px;border-radius:16px;border:1px solid var(--chip-bdr);overflow:hidden;background:var(--card);box-shadow:var(--sh)}
 .vt img{width:100%;height:100%;object-fit:cover;display:block}
-.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;text-align:center;line-height:44px;font-size:18px}
-.vn{font-size:14px;line-height:1.3;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
-.nw{flex:0 0 244px;display:block;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--sh);color:var(--fg);text-decoration:none;scroll-snap-align:start}
+.vp{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:999px;background:rgba(139,92,246,.82);border:1px solid rgba(255,255,255,.22);color:#fff;text-align:center;line-height:42px;font-size:16px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.vn{font-size:14px;line-height:1.32;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
+.nw{flex:0 0 244px;display:block;background:var(--card);border:1px solid var(--chip-bdr);border-radius:16px;overflow:hidden;box-shadow:var(--sh);color:var(--fg);text-decoration:none;scroll-snap-align:start}
 .nw .ni{width:100%;height:132px;object-fit:cover;display:block}
 .nw .nt{display:-webkit-box;padding:10px 12px;font-size:14px;line-height:1.35;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
 .cchips{display:flex;gap:8px;overflow-x:auto;padding:4px 16px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.cchip{flex:0 0 auto;padding:6px 14px;border-radius:14px;border:0;background:var(--fld);color:var(--fg);font-size:12px;box-shadow:var(--sh);white-space:nowrap}
-.cchip.on{background:var(--acc);color:#fff}
+.cchip{flex:0 0 auto;padding:6px 14px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:12px;font-weight:500;box-shadow:var(--sh);white-space:nowrap}
+.cchip.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600;box-shadow:0 4px 14px rgba(139,92,246,.32)}
 """
     }
 
@@ -442,7 +443,9 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         mobileUa = WebSettings.getDefaultUserAgent(this).replace("; wv", "")
         desktopUa = buildDesktopUa()
         if (Build.VERSION.SDK_INT < 35) {
+            @Suppress("DEPRECATION")
             window.statusBarColor = BG
+            @Suppress("DEPRECATION")
             window.navigationBarColor = BAR
         }
         wipePrivate()
@@ -769,6 +772,17 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         }
     }
 
+    private fun surfaceDrawable(
+        fillColor: Int,
+        radiusDp: Float,
+        strokeColor: Int = HAIRLINE,
+        strokeDp: Int = 1
+    ): GradientDrawable = GradientDrawable().apply {
+        setColor(fillColor)
+        cornerRadius = dp(radiusDp.toInt()).toFloat()
+        if (strokeDp > 0) setStroke(dp(strokeDp), strokeColor)
+    }
+
     private fun buildUi() {
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
@@ -789,10 +803,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val pillBox = LinearLayout(this)
         pillBox.orientation = LinearLayout.HORIZONTAL
         pillBox.gravity = Gravity.CENTER_VERTICAL
-        val pill = GradientDrawable()
-        pill.setColor(BG)
-        pill.cornerRadius = dp(24).toFloat()
-        pillBox.background = pill
+        pillBox.background = surfaceDrawable(BG, 24f, HAIRLINE, 1)
 
         lockIcon = icon("search", MUTE)
         val lockLp = LinearLayout.LayoutParams(dp(18), dp(18))
@@ -850,14 +861,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
 
         content = FrameLayout(this)
 
-        bottomBg = GradientDrawable()
-        bottomBg.setColor(BAR)
-        bottomBg.cornerRadius = dp(28).toFloat()
+        bottomBg = surfaceDrawable(BAR, 28f, VIOLET_GLOW, 1)
         val island = LinearLayout(this)
         island.orientation = LinearLayout.HORIZONTAL
         island.gravity = Gravity.CENTER_VERTICAL
         island.background = bottomBg
-        island.elevation = dp(8).toFloat()
+        island.elevation = dp(10).toFloat()
         island.setPadding(dp(6), dp(4), dp(6), dp(4))
 
         island.addView(
@@ -879,11 +888,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         tabBtn.setTextColor(INK)
         tabBtn.gravity = Gravity.CENTER
         val tabBox = GradientDrawable()
-        tabBox.setColor(Color.TRANSPARENT)
-        tabBox.setStroke(dp(2), INK)
-        tabBox.cornerRadius = dp(7).toFloat()
+        tabBox.setColor(VIOLET_TINT)
+        tabBox.setStroke(dp(2), ROSE)
+        tabBox.cornerRadius = dp(999).toFloat()
         tabBtn.background = tabBox
-        island.addView(cell(tabBtn, 26, "Tabs") { showTabs() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        island.addView(cell(tabBtn, 28, "Tabs") { showTabs() }, LinearLayout.LayoutParams(0, dp(48), 1f))
         island.addView(
             cell(icon("menu", INK), 24, "Menu") { showMenu() },
             LinearLayout.LayoutParams(0, dp(48), 1f)
@@ -902,7 +911,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         suggestBox.orientation = LinearLayout.VERTICAL
         val sbBg = GradientDrawable()
         sbBg.setColor(SHEET)
-        val sr = dp(18).toFloat()
+        sbBg.setStroke(dp(1), HAIRLINE)
+        val sr = dp(20).toFloat()
         sbBg.cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, sr, sr, sr, sr)
         suggestBox.background = sbBg
         suggestBox.elevation = dp(12).toFloat()
@@ -922,11 +932,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         floatMenu = icon("menu", INK)
         floatMenu.setPadding(dp(10), dp(10), dp(10), dp(10))
         floatMenu.contentDescription = "Menu"
-        val fb = GradientDrawable()
-        fb.shape = GradientDrawable.OVAL
-        fb.setColor(0xCC122A4D.toInt())
-        floatMenu.background = fb
-        floatMenu.elevation = dp(6).toFloat()
+        floatMenu.background = surfaceDrawable(0xE6131622.toInt(), 999f, VIOLET_GLOW, 1)
+        floatMenu.elevation = dp(8).toFloat()
         floatMenu.visibility = View.GONE
         floatMenu.setOnClickListener { showMenu() }
         val fLp = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.BOTTOM or Gravity.END)
@@ -1054,12 +1061,18 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val t = currentOrNull() ?: return
         var color = MUTE
         val kind = when {
-            t.url.startsWith("https://") -> "lock"
+            t.url.startsWith("https://") -> {
+                color = ROSE
+                "lock"
+            }
             t.url.startsWith("http://") -> {
                 color = Color.parseColor("#FFB74D")
                 "warning"
             }
-            t.priv -> "shield"
+            t.priv -> {
+                color = ROSE
+                "shield"
+            }
             else -> "search"
         }
         lockIcon.setImageDrawable(IconDrawable(kind, color))
@@ -2083,8 +2096,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
 
     private fun privateHtml(): String =
         homeHead(true, siteIcons()) +
-            "<div class=\"sec\" style=\"text-align:center;color:#9EB4CF;font-size:14px;line-height:1.5;padding:0 24px\">" +
-            "<b style=\"color:#2DD4BF\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
+            "<div class=\"sec\" style=\"text-align:center;color:#949AB0;font-size:14px;line-height:1.5;padding:0 24px\">" +
+            "<b style=\"color:#8B5CF6\">Private tab</b><br>History, cookies and site data from private tabs are deleted when you close the last private tab.<br>" +
             "Bookmarks can't be saved from private tabs. Downloads from private tabs are deleted when you close the last private tab.</div>" +
             searchScript() + "</body></html>"
 
@@ -2681,10 +2694,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(BAR)
-        bg.cornerRadius = dp(16).toFloat()
-        row.background = bg
+        row.background = surfaceDrawable(BAR, 16f)
         row.setPadding(dp(12), dp(10), dp(4), dp(10))
         row.setOnClickListener {
             sheet.dismiss()
@@ -2725,11 +2735,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         badge.gravity = Gravity.CENTER
         badge.textSize = 15f
         badge.setTypeface(badge.typeface, Typeface.BOLD)
-        badge.setTextColor(INK)
-        val circle = GradientDrawable()
-        circle.shape = GradientDrawable.OVAL
-        circle.setColor(BG)
-        badge.background = circle
+        badge.setTextColor(ROSE)
+        badge.background = surfaceDrawable(BG, 999f, VIOLET_GLOW, 1)
         badge.text = label.trim().take(1).uppercase().ifEmpty { "★" }
         row.addView(badge, LinearLayout.LayoutParams(dp(42), dp(42)))
 
@@ -2811,24 +2818,26 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
             val chip = TextView(this)
             chip.text = cat
             chip.textSize = 12f
-            chip.setPadding(dp(12), dp(6), dp(12), dp(6))
+            chip.setTypeface(chip.typeface, if (cat == activeCat) Typeface.BOLD else Typeface.NORMAL)
+            chip.setPadding(dp(14), dp(6), dp(14), dp(6))
             chip.setOnClickListener {
                 activeCat = cat
                 for ((idx, cv) in chipViews.withIndex()) {
                     val on = cats[idx] == activeCat
-                    val bg = GradientDrawable()
-                    bg.setColor(if (on) ROSE else BAR)
-                    bg.cornerRadius = dp(14).toFloat()
-                    cv.background = bg
-                    cv.setTextColor(if (on) BG else INK)
+                    cv.background = surfaceDrawable(
+                        if (on) ROSE else BAR,
+                        999f,
+                        if (on) ROSE else HAIRLINE,
+                        1
+                    )
+                    cv.setTextColor(if (on) INK else MUTE)
+                    cv.setTypeface(cv.typeface, if (on) Typeface.BOLD else Typeface.NORMAL)
                 }
                 renderFn()
             }
-            val bg = GradientDrawable()
-            bg.setColor(if (cat == activeCat) ROSE else BAR)
-            bg.cornerRadius = dp(14).toFloat()
-            chip.background = bg
-            chip.setTextColor(if (cat == activeCat) BG else INK)
+            val on = cat == activeCat
+            chip.background = surfaceDrawable(if (on) ROSE else BAR, 999f, if (on) ROSE else HAIRLINE, 1)
+            chip.setTextColor(if (on) INK else MUTE)
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             lp.rightMargin = dp(6)
             chipRow.addView(chip, lp)
@@ -2879,10 +2888,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(BAR)
-        bg.cornerRadius = dp(16).toFloat()
-        row.background = bg
+        row.background = surfaceDrawable(BAR, 16f)
         row.setPadding(dp(12), dp(10), dp(4), dp(10))
         row.setOnClickListener {
             if (item.done) {
@@ -2893,11 +2899,9 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val badge = TextView(this)
         badge.gravity = Gravity.CENTER
         badge.textSize = 11f
-        badge.setTextColor(INK)
-        val circle = GradientDrawable()
-        circle.shape = GradientDrawable.OVAL
-        circle.setColor(BG)
-        badge.background = circle
+        badge.setTypeface(badge.typeface, Typeface.BOLD)
+        badge.setTextColor(ROSE)
+        badge.background = surfaceDrawable(BG, 999f, VIOLET_GLOW, 1)
         val ext = item.title.substringAfterLast('.', "").take(4).uppercase()
         badge.text = if (ext.isEmpty()) "FILE" else ext
         row.addView(badge, LinearLayout.LayoutParams(dp(42), dp(42)))
@@ -3086,12 +3090,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val pill = LinearLayout(this)
         pill.orientation = LinearLayout.HORIZONTAL
         pill.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(BAR)
-        bg.cornerRadius = dp(24).toFloat()
-        bg.setStroke(dp(1), ROSE)
-        pill.background = bg
-        pill.elevation = dp(8).toFloat()
+        pill.background = surfaceDrawable(BAR, 999f, ROSE, 1)
+        pill.elevation = dp(10).toFloat()
         pill.setPadding(dp(16), dp(6), dp(6), dp(6))
         val label = TextView(this)
         label.text = "Reading mode available"
@@ -3390,7 +3390,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
     private fun suggestRow(title: String, sub: String?, onClick: () -> Unit): View {
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(10), dp(8), dp(10), dp(8))
+        col.setPadding(dp(12), dp(8), dp(12), dp(8))
         col.background = ripple()
         col.setOnClickListener { onClick() }
         val t = TextView(this)
@@ -3423,10 +3423,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
             c.textSize = 13f
             c.setTextColor(INK)
             c.gravity = Gravity.CENTER
-            val bg = GradientDrawable()
-            bg.setColor(BAR)
-            bg.cornerRadius = dp(16).toFloat()
-            c.background = bg
+            c.background = surfaceDrawable(BAR, 999f)
             c.setOnClickListener { action() }
             val lp = LinearLayout.LayoutParams(0, dp(34), 1f)
             lp.rightMargin = dp(6)
@@ -3518,11 +3515,16 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = BAR
         c.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 6f
+        paint.color = ROSE
+        c.drawCircle(size / 2f, size / 2f, size / 2f - 3f, paint)
+        paint.style = Paint.Style.FILL
         paint.color = INK
-        paint.textSize = 100f
+        paint.textSize = 96f
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = Typeface.DEFAULT_BOLD
-        c.drawText(letter, size / 2f, size / 2f + 35f, paint)
+        c.drawText(letter, size / 2f, size / 2f + 33f, paint)
         return Icon.createWithBitmap(bmp)
     }
 
@@ -3722,12 +3724,15 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         }
     }
 
-    private val SHEET = Color.parseColor("#0D2240")
+    private val SHEET = Color.parseColor("#131622")
+    private val HAIRLINE = Color.parseColor("#24283A")
+    private val VIOLET_GLOW = Color.parseColor("#668B5CF6")
+    private val VIOLET_TINT = Color.parseColor("#298B5CF6")
 
     private fun dlg(): AlertDialog.Builder =
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
 
-    private fun ripple(): Drawable = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), null, null)
+    private fun ripple(): Drawable = RippleDrawable(ColorStateList.valueOf(VIOLET_GLOW), null, null)
 
     private fun icon(kind: String, color: Int): ImageView {
         val iv = ImageView(this)
@@ -3752,6 +3757,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         box.orientation = LinearLayout.VERTICAL
         val bg = GradientDrawable()
         bg.setColor(SHEET)
+        bg.setStroke(dp(1), VIOLET_GLOW)
         val r = dp(24).toFloat()
         bg.cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
         box.background = bg
@@ -3769,81 +3775,113 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
 
     private fun sheetHandle(box: LinearLayout) {
         val h = View(this)
-        val bg = GradientDrawable()
-        bg.setColor(0x4DFFFFFF)
-        bg.cornerRadius = dp(2).toFloat()
-        h.background = bg
+        h.background = surfaceDrawable(MUTE, 999f, strokeDp = 0)
         val lp = LinearLayout.LayoutParams(dp(40), dp(4))
         lp.gravity = Gravity.CENTER_HORIZONTAL
-        lp.bottomMargin = dp(14)
+        lp.bottomMargin = dp(10)
         box.addView(h, lp)
     }
 
-    private fun quickAction(kind: String, label: String, onClick: () -> Unit): View {
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.gravity = Gravity.CENTER_HORIZONTAL
-        col.setOnClickListener { onClick() }
-        val circle = FrameLayout(this)
-        val bg = GradientDrawable()
-        bg.shape = GradientDrawable.OVAL
-        bg.setColor(BAR)
-        circle.background = bg
-        circle.addView(icon(kind, INK), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
-        col.addView(circle, LinearLayout.LayoutParams(dp(54), dp(54)))
-        val tv = TextView(this)
-        tv.text = label
-        tv.textSize = 12f
-        tv.setTextColor(MUTE)
-        tv.gravity = Gravity.CENTER
-        tv.setPadding(0, dp(6), 0, 0)
-        col.addView(tv)
-        return col
+    private fun sheetTitle(box: LinearLayout, text: String, bottomDp: Int = 10): TextView {
+        val t = TextView(this)
+        t.text = text
+        t.textSize = 16f
+        t.setTextColor(INK)
+        t.setTypeface(t.typeface, Typeface.BOLD)
+        t.setPadding(dp(4), dp(4), dp(4), dp(bottomDp))
+        box.addView(t)
+        return t
     }
 
-    private fun sheetRow(label: String, value: String?, danger: Boolean, onClick: () -> Unit): View {
+    private fun stateChip(label: String, on: Boolean): TextView {
+        val c = TextView(this)
+        c.text = label
+        c.textSize = 11f
+        c.setTypeface(c.typeface, Typeface.BOLD)
+        c.setTextColor(INK)
+        c.background = surfaceDrawable(
+            if (on) ROSE else VIOLET_TINT,
+            999f,
+            if (on) ROSE else VIOLET_GLOW,
+            1
+        )
+        c.setPadding(dp(12), dp(5), dp(12), dp(5))
+        return c
+    }
+
+    private fun pillButton(label: String, accent: Boolean, onClick: () -> Unit): TextView {
+        val b = TextView(this)
+        b.text = label
+        b.textSize = 14f
+        b.setTypeface(b.typeface, Typeface.BOLD)
+        b.setTextColor(INK)
+        b.gravity = Gravity.CENTER
+        b.background = surfaceDrawable(
+            if (accent) ROSE else BAR,
+            999f,
+            if (accent) ROSE else HAIRLINE,
+            1
+        )
+        b.setPadding(dp(16), dp(11), dp(16), dp(11))
+        b.setOnClickListener { onClick() }
+        return b
+    }
+
+    private fun rowLp(bottomDp: Int = 8): LinearLayout.LayoutParams {
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        lp.bottomMargin = dp(bottomDp)
+        return lp
+    }
+
+    private fun cardRow(
+        title: String,
+        sub: String?,
+        trailing: View?,
+        highlight: Boolean,
+        onClick: (() -> Unit)?
+    ): LinearLayout {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        row.minimumHeight = dp(48)
-        row.setPadding(dp(4), 0, dp(4), 0)
-        row.background = ripple()
-        row.setOnClickListener { onClick() }
-        val l = TextView(this)
-        l.text = label
-        l.textSize = 15f
-        l.setTextColor(if (danger) ROSE else INK)
-        row.addView(l, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (value != null) {
-            val v = TextView(this)
-            v.text = value
-            v.textSize = 13f
-            v.setTextColor(MUTE)
-            row.addView(v)
+        val fill = if (highlight) VIOLET_TINT else BAR
+        val stroke = if (highlight) ROSE else HAIRLINE
+        row.background = surfaceDrawable(fill, 18f, stroke, 1)
+        row.setPadding(dp(14), dp(12), dp(if (trailing != null) 8 else 14), dp(12))
+        if (onClick != null) row.setOnClickListener { onClick() }
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        val t = TextView(this)
+        t.text = title
+        t.textSize = 14f
+        t.setTextColor(INK)
+        if (highlight) t.setTypeface(t.typeface, Typeface.BOLD)
+        t.maxLines = 1
+        t.ellipsize = TextUtils.TruncateAt.END
+        col.addView(t)
+        if (!sub.isNullOrBlank()) {
+            val s = TextView(this)
+            s.text = sub
+            s.textSize = 12f
+            s.setTextColor(MUTE)
+            s.maxLines = 1
+            s.ellipsize = TextUtils.TruncateAt.END
+            col.addView(s)
+        }
+        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (trailing != null) {
+            val lp = (trailing.layoutParams as? LinearLayout.LayoutParams)
+                ?: LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.leftMargin = dp(8)
+            row.addView(trailing, lp)
         }
         return row
     }
 
-    // ---- shared look for settings screens: same sheet, rounded rows and colours as Bookmarks, Downloads and Tabs ----
-
-    private fun rowLp(): LinearLayout.LayoutParams {
-        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.bottomMargin = dp(8)
-        return lp
-    }
-
-    /** Bottom sheet with a title and a scrolling list. Returns the dialog, the sheet box and the list to fill. */
-    private fun listSheet(title: String, rows: Int): Triple<Dialog, LinearLayout, LinearLayout> {
-        val maxH = (resources.displayMetrics.heightPixels * 0.8).toInt()
-        val (d, box) = newSheet(minOf(maxH, dp(130 + rows * 68)))
+    private fun listSheet(title: String, bottomDp: Int = 10): Triple<Dialog, LinearLayout, LinearLayout> {
+        val screenH = resources.displayMetrics.heightPixels
+        val (d, box) = newSheet((screenH * 0.72).toInt())
         sheetHandle(box)
-        val tv = TextView(this)
-        tv.text = title
-        tv.textSize = 16f
-        tv.setTextColor(INK)
-        tv.setTypeface(tv.typeface, Typeface.BOLD)
-        tv.setPadding(dp(4), dp(4), dp(4), dp(10))
-        box.addView(tv)
+        sheetTitle(box, title, bottomDp)
         val scroll = ScrollView(this)
         val list = LinearLayout(this)
         list.orientation = LinearLayout.VERTICAL
@@ -3862,63 +3900,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         return empty
     }
 
-    /** Small rounded label: ON/OFF, a tick, or one option of a group. Filled in rose when [on]. */
-    private fun stateChip(text: String, on: Boolean): TextView {
-        val c = TextView(this)
-        c.text = text
-        c.textSize = 12f
-        c.setTypeface(c.typeface, Typeface.BOLD)
-        c.gravity = Gravity.CENTER
-        c.setPadding(dp(12), dp(6), dp(12), dp(6))
-        c.setTextColor(if (on) BG else INK)
-        val bg = GradientDrawable()
-        bg.setColor(if (on) ROSE else BG)
-        bg.cornerRadius = dp(14).toFloat()
-        c.background = bg
-        return c
-    }
-
-    /** One rounded settings row: a name, an optional smaller line under it, and an optional view on the right. */
-    private fun cardRow(label: String, sub: String?, trailing: View?, selected: Boolean = false, onClick: (() -> Unit)?): View {
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(BAR)
-        bg.cornerRadius = dp(16).toFloat()
-        if (selected) bg.setStroke(dp(2), ROSE)
-        row.background = bg
-        row.setPadding(dp(14), dp(12), dp(10), dp(12))
-        if (onClick != null) row.setOnClickListener { onClick() }
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        val name = TextView(this)
-        name.text = label
-        name.textSize = 15f
-        name.setTextColor(INK)
-        name.maxLines = 1
-        name.ellipsize = TextUtils.TruncateAt.END
-        col.addView(name)
-        if (sub != null) {
-            val st = TextView(this)
-            st.text = sub
-            st.textSize = 12f
-            st.setTextColor(MUTE)
-            st.maxLines = 1
-            st.ellipsize = TextUtils.TruncateAt.END
-            col.addView(st)
-        }
-        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (trailing != null) row.addView(trailing)
-        return row
-    }
-
-    /** Single-choice picker in the same sheet style; the current choice gets a rose outline and a tick. */
-    private fun showChoiceSheet(title: String, labels: List<String>, selected: Int, onPick: (Int) -> Unit) {
-        val (d, _, list) = listSheet(title, labels.size)
-        for ((i, l) in labels.withIndex()) {
-            val mark: View? = if (i == selected) stateChip("\u2713", true) else null
-            list.addView(cardRow(l, null, mark, i == selected) {
+    private fun showChoiceSheet(title: String, items: List<String>, selected: Int, onPick: (Int) -> Unit) {
+        val (d, _, list) = listSheet(title)
+        for ((i, label) in items.withIndex()) {
+            val on = i == selected
+            val check = if (on) icon("check", ROSE).apply { layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)) } else null
+            list.addView(cardRow(label, null, check, on) {
                 d.dismiss()
                 onPick(i)
             }, rowLp())
@@ -3926,76 +3913,124 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         d.show()
     }
 
-    private fun addMenuRows(list: LinearLayout, rows: List<Any>, onRun: (MenuRow) -> Unit) {
-        for (r in rows) {
-            if (r is MenuHeader) {
-                val hv = TextView(this)
-                hv.text = r.label.uppercase()
-                hv.textSize = 11f
-                hv.letterSpacing = 0.08f
-                hv.setTypeface(hv.typeface, Typeface.BOLD)
-                hv.setTextColor(ROSE)
-                hv.setPadding(dp(4), dp(16), dp(4), dp(4))
-                list.addView(hv)
-                continue
+    private fun attachTabSwipeGestures(view: View) {
+        val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                if (e1 == null || tabs.size < 2) return false
+                val dx = e2.x - e1.x
+                val dy = e2.y - e1.y
+                if (Math.abs(dx) < dp(70) || Math.abs(dx) < Math.abs(dy) * 1.5f) return false
+                if (Math.abs(vx) < 250f) return false
+                if (dx < 0 && cur < tabs.size - 1) {
+                    switchTo(cur + 1)
+                    return true
+                }
+                if (dx > 0 && cur > 0) {
+                    switchTo(cur - 1)
+                    return true
+                }
+                return false
             }
-            val mr = r as MenuRow
-            val divider = View(this)
-            divider.setBackgroundColor(0x1AFFFFFF)
-            list.addView(divider, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)))
-            list.addView(sheetRow(mr.label, mr.value, mr.danger) { onRun(mr) })
+        })
+        view.setOnTouchListener { _, ev ->
+            detector.onTouchEvent(ev)
+            false
         }
     }
 
-    private fun pillButton(label: String, primary: Boolean, onClick: () -> Unit): TextView {
-        val b = TextView(this)
-        b.text = label
-        b.textSize = 14f
-        b.setTypeface(b.typeface, Typeface.BOLD)
-        b.gravity = Gravity.CENTER
-        b.setTextColor(if (primary) BG else INK)
-        val bg = GradientDrawable()
-        bg.setColor(if (primary) ROSE else BAR)
-        bg.cornerRadius = dp(23).toFloat()
-        b.background = bg
-        b.setOnClickListener { onClick() }
-        return b
+    private fun showTabs() {
+        val screenH = resources.displayMetrics.heightPixels
+        val (d, box) = newSheet((screenH * 0.72).toInt())
+        sheetHandle(box)
+
+        val head = LinearLayout(this)
+        head.orientation = LinearLayout.HORIZONTAL
+        head.gravity = Gravity.CENTER_VERTICAL
+        head.setPadding(dp(4), dp(4), dp(4), dp(12))
+        val title = TextView(this)
+        title.text = "Tabs (" + tabs.size + ")"
+        title.textSize = 16f
+        title.setTextColor(INK)
+        title.setTypeface(title.typeface, Typeface.BOLD)
+        head.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val privBtn = pillButton("Private", false) {
+            d.dismiss()
+            newTab(null, true)
+        }
+        val newBtn = pillButton("+ New", true) {
+            d.dismiss()
+            newTab(null)
+        }
+        val bLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        bLp.leftMargin = dp(8)
+        head.addView(privBtn)
+        head.addView(newBtn, bLp)
+        box.addView(head)
+
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        scroll.addView(list)
+        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        fun render() {
+            list.removeAllViews()
+            title.text = "Tabs (" + tabs.size + ")"
+            for ((i, t) in tabs.withIndex()) {
+                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                lp.bottomMargin = dp(8)
+                list.addView(tabRow(t, i == cur, {
+                    d.dismiss()
+                    switchTo(i)
+                }) {
+                    closeTab(i)
+                    if (tabs.size <= 1) d.dismiss() else render()
+                }, lp)
+            }
+        }
+        render()
+        d.show()
     }
 
-    private fun tabRow(t: Tab, isCur: Boolean, onSelect: () -> Unit, onClose: () -> Unit): View {
+    private fun tabRow(t: Tab, selected: Boolean, onSelect: () -> Unit, onClose: () -> Unit): View {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(if (t.priv) PRIV else BAR)
-        bg.cornerRadius = dp(16).toFloat()
-        if (isCur) bg.setStroke(dp(2), ROSE)
-        row.background = bg
+        val fill = when {
+            t.priv -> PRIV
+            selected -> VIOLET_TINT
+            else -> BAR
+        }
+        val stroke = when {
+            selected -> ROSE
+            t.priv -> VIOLET_GLOW
+            else -> HAIRLINE
+        }
+        row.background = surfaceDrawable(fill, 18f, stroke, if (selected) 2 else 1)
         row.setPadding(dp(12), dp(10), dp(4), dp(10))
         row.setOnClickListener { onSelect() }
 
         val badge = TextView(this)
         badge.gravity = Gravity.CENTER
-        badge.textSize = 15f
-        badge.setTextColor(INK)
-        val circle = GradientDrawable()
-        circle.shape = GradientDrawable.OVAL
-        circle.setColor(BG)
-        badge.background = circle
-        badge.text = if (t.priv) "P" else t.title.trim().take(1).uppercase().ifEmpty { "N" }
-        row.addView(badge, LinearLayout.LayoutParams(dp(36), dp(36)))
+        badge.textSize = 14f
+        badge.setTypeface(badge.typeface, Typeface.BOLD)
+        badge.setTextColor(if (t.priv || selected) ROSE else INK)
+        badge.background = surfaceDrawable(BG, 999f, if (selected) ROSE else HAIRLINE, 1)
+        badge.text = if (t.priv) "\uD83D\uDD76" else (t.title.trim().take(1).uppercase().ifEmpty { "N" })
+        row.addView(badge, LinearLayout.LayoutParams(dp(40), dp(40)))
 
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
         col.setPadding(dp(12), 0, dp(8), 0)
         val name = TextView(this)
-        name.text = if (t.title.isBlank()) "New tab" else t.title
+        name.text = (if (t.priv) "Private · " else "") + t.title
         name.textSize = 14f
         name.setTextColor(INK)
+        if (selected) name.setTypeface(name.typeface, Typeface.BOLD)
         name.maxLines = 1
         name.ellipsize = TextUtils.TruncateAt.END
         val sub = TextView(this)
-        sub.text = (if (t.priv) "Private · " else "") + (Uri.parse(t.url).host ?: "Start page")
+        sub.text = if (t.url.isEmpty()) "Start page" else t.url
         sub.textSize = 12f
         sub.setTextColor(MUTE)
         sub.maxLines = 1
@@ -4013,948 +4048,468 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         return row
     }
 
-    private val listCache = HashMap<String, List<Pair<String, String>>>()
+    private fun showMenu() {
+        val t = currentOrNull() ?: return
+        val host = hostOf(t.url)
+        val screenH = resources.displayMetrics.heightPixels
+        val (d, box) = newSheet((screenH * 0.78).toInt())
+        sheetHandle(box)
 
-    private fun parseList(key: String): List<Pair<String, String>> {
+        val grid = LinearLayout(this)
+        grid.orientation = LinearLayout.HORIZONTAL
+        grid.setPadding(0, dp(4), 0, dp(14))
+        grid.addView(quickTile(d, "new_tab", "New tab") { newTab(null) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        grid.addView(quickTile(d, "shield", "Private") { newTab(null, true) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        grid.addView(quickTile(d, "bookmark", "Bookmark") { addBookmark() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        grid.addView(quickTile(d, "share", "Share") { sharePage() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        box.addView(grid)
+
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        scroll.addView(list)
+        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        fun addSection(text: String) {
+            val h = TextView(this)
+            h.text = text.uppercase()
+            h.textSize = 11f
+            h.letterSpacing = 0.08f
+            h.setTextColor(ROSE)
+            h.setTypeface(h.typeface, Typeface.BOLD)
+            h.setPadding(dp(8), dp(14), dp(8), dp(6))
+            list.addView(h)
+        }
+
+        fun addAction(kind: String, title: String, subtitle: String? = null, pill: String? = null, pillOn: Boolean = false, action: () -> Unit) {
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+            row.background = surfaceDrawable(BAR, 16f)
+            row.setPadding(dp(12), dp(10), dp(12), dp(10))
+            row.setOnClickListener {
+                d.dismiss()
+                action()
+            }
+            val ic = icon(kind, INK)
+            val icLp = LinearLayout.LayoutParams(dp(22), dp(22))
+            icLp.rightMargin = dp(14)
+            row.addView(ic, icLp)
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            val t1 = TextView(this)
+            t1.text = title
+            t1.textSize = 14f
+            t1.setTextColor(INK)
+            col.addView(t1)
+            if (subtitle != null) {
+                val t2 = TextView(this)
+                t2.text = subtitle
+                t2.textSize = 12f
+                t2.setTextColor(MUTE)
+                t2.maxLines = 1
+                t2.ellipsize = TextUtils.TruncateAt.END
+                col.addView(t2)
+            }
+            row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (pill != null) {
+                val p = stateChip(pill, pillOn)
+                val pLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                pLp.leftMargin = dp(8)
+                row.addView(p, pLp)
+            }
+            list.addView(row, rowLp(6))
+        }
+
+        addSection("Library")
+        addAction("bookmark", "Bookmarks") { showBookmarks() }
+        addAction("history", "History") { openHistoryPage() }
+        addAction("download", "Downloads") { showDownloads() }
+        addAction("link", "Copy link") { copyLink() }
+        addAction("qr", "Scan QR code") { scanQr() }
+        addAction("qr", "Show QR code", "Share this page as a code") { showPageQr() }
+        addAction("home", "Add to home screen", "Opens like an app") { addToHomeScreen() }
+
+        addSection("Page")
+        addAction("search", "Find in page") { findInPage() }
+        addAction("reader", if (t.readerUrl != null) "Exit reading mode" else "Reading mode") { toggleReader() }
+        addAction("desktop", "Desktop site", null, if (t.desktop) "ON" else "OFF", t.desktop) { toggleDesktop() }
+        addAction("vr", "360° viewer", "Open a 360 photo or video") { openVrViewer() }
+        addAction("fullscreen", if (barsHidden) "Show toolbars" else "Full screen", null, if (barsHidden) "ON" else "OFF", barsHidden) { setBarsHidden(!barsHidden) }
+        addAction("text_size", "Text size", getTextZoom().toString() + "%") { chooseTextZoom() }
+        if (host != null) {
+            addAction("lock", "Site settings & permissions", host) { showSiteSettingsDialog() }
+        }
+
+        addSection("Privacy & Shields")
+        val blockedCount = t.blocked.get()
+        addAction("shield", "Ad & tracker blocking", if (blockedCount > 0) blockedCount.toString() + " blocked on this page" else null, if (adBlockOn) "ON" else "OFF", adBlockOn) { toggleAdBlock() }
+        if (host != null) {
+            val paused = pausedHosts.contains(host)
+            addAction("pause", if (paused) "Resume blocking on this site" else "Pause blocking on this site", host) { togglePauseHere() }
+        }
+        addAction("cookie", "Third-party cookies", null, if (thirdPartyCookies()) "ALLOWED" else "BLOCKED", thirdPartyCookies()) { toggleThirdPartyCookies() }
+        addAction("trash", "Clear browsing data") { clearData() }
+
+        addSection("Settings")
+        addAction("search", "Search engine", searchBaseName()) { chooseEngine() }
+        addAction("globe", "Default domain ending", defaultTld()) { chooseTld() }
+        addAction("palette", "Homepage theme", homeThemeMode().replaceFirstChar { it.uppercase() }) { toggleHomeTheme() }
+        addAction("image", "Site icons on start page", null, if (siteIcons()) "ON" else "OFF", siteIcons()) { toggleIcons() }
+        addAction("news", "Manage news feeds", "Add or remove RSS sources") { showCustomFeedManager(false) }
+        addAction("video", "Manage video channels", "Add or remove YouTube channels") { showCustomFeedManager(true) }
+        addAction("cloud", "Google Drive backup", "Back up or restore your data") { showDriveBackupSheet() }
+        addAction("help", "Help & feedback") { showHelp() }
+        d.show()
+    }
+
+    private fun quickTile(sheet: Dialog, kind: String, label: String, action: () -> Unit): View {
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.gravity = Gravity.CENTER_HORIZONTAL
+        col.setPadding(dp(4), dp(4), dp(4), dp(4))
+        col.setOnClickListener {
+            sheet.dismiss()
+            action()
+        }
+        val circle = FrameLayout(this)
+        circle.background = surfaceDrawable(BAR, 999f, VIOLET_GLOW, 1)
+        circle.addView(icon(kind, ROSE), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        col.addView(circle, LinearLayout.LayoutParams(dp(50), dp(50)))
+        val t = TextView(this)
+        t.text = label
+        t.textSize = 12f
+        t.setTextColor(INK)
+        t.gravity = Gravity.CENTER
+        val tLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        tLp.topMargin = dp(6)
+        col.addView(t, tLp)
+        return col
+    }
+
+    private fun showHelp() {
+        val (d, _, list) = listSheet("Help & feedback")
+        val crashFile = File(filesDir, "crash_history.log")
+        val hasLog = crashFile.exists() && crashFile.length() > 0L
+
+        fun item(kind: String, title: String, sub: String, onClick: () -> Unit) {
+            val ic = icon(kind, ROSE).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
+            list.addView(cardRow(title, sub, ic, false) {
+                d.dismiss()
+                onClick()
+            }, rowLp())
+        }
+
+        item("help", "How diddu works", "Quick tips for tabs, private mode, reading mode and blocking") { showTips() }
+        item("share", "Send feedback", "Share a bug report or suggestion with the developer") { sendFeedback(null) }
+        if (hasLog) {
+            item("warning", "Share last crash report", "Saved on this device from an earlier unexpected close") {
+                val log = try { crashFile.readText() } catch (e: Exception) { "" }
+                sendFeedback(log)
+            }
+        }
+        val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0" } catch (e: Exception) { "1.0" }
+        val foot = TextView(this)
+        foot.text = "diddu " + ver + " · Android " + Build.VERSION.RELEASE
+        foot.textSize = 12f
+        foot.setTextColor(MUTE)
+        foot.gravity = Gravity.CENTER
+        foot.setPadding(0, dp(16), 0, dp(4))
+        list.addView(foot)
+        d.show()
+    }
+
+    private fun showTips() {
+        val tips = listOf(
+            "Tabs" to "Tap the tab counter in the bottom bar to switch tabs, open a new tab, or open a Private tab.",
+            "Private tabs" to "History, cookies and site data are wiped automatically as soon as the last private tab is closed.",
+            "Reading mode" to "Open any article and choose Reading mode in the menu for clean, distraction-free text.",
+            "Ad & tracker blocking" to "On by default. If a website needs ads to work, pause blocking just for that site in the menu.",
+            "Home screen apps" to "Choose Add to home screen in the menu to pin any website as a full-screen app icon.",
+            "Google Drive backup" to "Save your bookmarks, feeds and settings to your own Google Drive and restore them on any phone."
+        )
+        val (d, _, list) = listSheet("How diddu works")
+        for ((head, body) in tips) {
+            val card = LinearLayout(this)
+            card.orientation = LinearLayout.VERTICAL
+            card.background = surfaceDrawable(BAR, 16f)
+            card.setPadding(dp(14), dp(12), dp(14), dp(12))
+            val t = TextView(this)
+            t.text = head
+            t.textSize = 14f
+            t.setTextColor(INK)
+            t.setTypeface(t.typeface, Typeface.BOLD)
+            val b = TextView(this)
+            b.text = body
+            b.textSize = 13f
+            b.setTextColor(MUTE)
+            b.setPadding(0, dp(4), 0, 0)
+            card.addView(t)
+            card.addView(b)
+            list.addView(card, rowLp())
+        }
+        d.show()
+    }
+
+    private fun sendFeedback(crashLog: String?) {
+        val input = EditText(this)
+        input.hint = if (crashLog != null) "What were you doing when it closed? (optional)" else "Describe what happened or what you'd like to see"
+        input.minLines = 3
+        input.maxLines = 6
+        input.gravity = Gravity.TOP or Gravity.START
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(20), dp(8), dp(20), 0)
+        box.addView(input)
+        dlg()
+            .setTitle(if (crashLog != null) "Share crash report" else "Send feedback")
+            .setView(box)
+            .setPositiveButton("Share") { _, _ ->
+                val note = input.text.toString().trim()
+                val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0" } catch (e: Exception) { "1.0" }
+                val sb = StringBuilder("diddu ").append(ver).append(" · ")
+                    .append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
+                    .append(" · Android ").append(Build.VERSION.RELEASE)
+                if (note.isNotEmpty()) sb.append("\n\n").append(note)
+                if (!crashLog.isNullOrBlank()) sb.append("\n\n").append(crashLog.take(12000))
+                shareText(sb.toString())
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun addBookmark() {
+        val t = currentOrNull() ?: return
+        if (t.priv) {
+            toast("Bookmarks can't be saved from private tabs")
+            return
+        }
+        if (t.url.isEmpty() || t.url.startsWith("about:")) {
+            toast("Open a page first")
+            return
+        }
+        val list = loadList("bookmarks")
+        list.removeAll { it.second == t.url }
+        list.add(0, Pair(t.title, t.url))
+        saveList("bookmarks", list)
+        toast("Bookmarked")
+    }
+
+    private fun sharePage() {
+        val t = currentOrNull() ?: return
+        if (t.url.isEmpty() || t.url.startsWith("about:")) {
+            toast("Open a page first")
+            return
+        }
+        val send = Intent(Intent.ACTION_SEND)
+        send.type = "text/plain"
+        send.putExtra(Intent.EXTRA_SUBJECT, t.title)
+        send.putExtra(Intent.EXTRA_TEXT, t.url)
+        try {
+            startActivity(Intent.createChooser(send, "Share link"))
+        } catch (e: Exception) {
+            toast("No app can share links")
+        }
+    }
+
+    private fun scanQr() {
+        try {
+            val scan = Intent("com.google.zxing.client.android.SCAN")
+            scan.putExtra("SCAN_MODE", "QR_CODE_MODE")
+            qrPicker.launch(scan)
+        } catch (e: Exception) {
+            toast("Install a QR scanner app to scan codes")
+        }
+    }
+
+    private fun showPageQr() {
+        val t = currentOrNull() ?: return
+        if (!isHttp(t.url)) {
+            toast("Open a web page first")
+            return
+        }
+        val bmp = QrCode.render(t.url, dp(240))
+        if (bmp == null) {
+            toast("This link is too long for a QR code")
+            return
+        }
+        val (d, box) = newSheet(ViewGroup.LayoutParams.WRAP_CONTENT)
+        sheetHandle(box)
+        sheetTitle(box, "Scan to open page", 4)
+        val sub = TextView(this)
+        sub.text = t.url
+        sub.textSize = 12f
+        sub.setTextColor(MUTE)
+        sub.maxLines = 2
+        sub.ellipsize = TextUtils.TruncateAt.MIDDLE
+        sub.setPadding(dp(4), 0, dp(4), dp(14))
+        box.addView(sub)
+
+        val card = FrameLayout(this)
+        card.background = surfaceDrawable(Color.WHITE, 20f, VIOLET_GLOW, 2)
+        card.setPadding(dp(16), dp(16), dp(16), dp(16))
+        val iv = ImageView(this)
+        iv.setImageBitmap(bmp)
+        card.addView(iv, FrameLayout.LayoutParams(dp(230), dp(230), Gravity.CENTER))
+        val cLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        cLp.gravity = Gravity.CENTER_HORIZONTAL
+        cLp.bottomMargin = dp(14)
+        box.addView(card, cLp)
+
+        box.addView(pillButton("Share link", true) {
+            d.dismiss()
+            sharePage()
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)))
+        d.show()
+    }
+
+    private fun toggleDesktop() {
+        val t = currentOrNull() ?: return
+        t.desktop = !t.desktop
+        t.autoDesktopSite = null
+        applyClientIdentity(t.web.settings, t.desktop, true)
+        if (t.url.isNotEmpty()) t.web.reload()
+        toast(if (t.desktop) "Desktop site on" else "Mobile site on")
+    }
+
+    private fun clearData() {
+        val labels = arrayOf("Browsing history", "Recent searches", "Cookies & site data", "Cached files", "Saved site permissions")
+        val checked = booleanArrayOf(true, true, false, true, false)
+        val (d, box) = newSheet(ViewGroup.LayoutParams.WRAP_CONTENT)
+        sheetHandle(box)
+        sheetTitle(box, "Clear browsing data")
+
+        for (i in labels.indices) {
+            val check = icon("check", ROSE).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+                visibility = if (checked[i]) View.VISIBLE else View.INVISIBLE
+            }
+            lateinit var row: LinearLayout
+            row = cardRow(labels[i], null, check, checked[i]) {
+                checked[i] = !checked[i]
+                check.visibility = if (checked[i]) View.VISIBLE else View.INVISIBLE
+                row.background = surfaceDrawable(
+                    if (checked[i]) VIOLET_TINT else BAR,
+                    18f,
+                    if (checked[i]) ROSE else HAIRLINE,
+                    1
+                )
+            }
+            box.addView(row, rowLp())
+        }
+
+        val btnLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46))
+        btnLp.topMargin = dp(6)
+        box.addView(pillButton("Clear selected", true) {
+            d.dismiss()
+            if (checked[0]) saveList("history", emptyList())
+            if (checked[1]) prefs.edit().remove("recent_searches").apply()
+            if (checked[2]) {
+                CookieManager.getInstance().removeAllCookies(null)
+                CookieManager.getInstance().flush()
+                WebStorage.getInstance().deleteAllData()
+            }
+            if (checked[3]) currentOrNull()?.web?.clearCache(true)
+            if (checked[4]) {
+                prefs.edit().remove("site_perms").apply()
+                GeolocationPermissions.getInstance().clearAll()
+            }
+            toast("Browsing data cleared")
+        }, btnLp)
+        d.show()
+    }
+
+    private fun loadList(key: String): MutableList<Pair<String, String>> {
         val out = mutableListOf<Pair<String, String>>()
         try {
             val arr = JSONArray(prefs.getString(key, "[]"))
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                out.add(Pair(o.getString("t"), o.getString("u")))
+                out.add(Pair(o.optString("t"), o.optString("u")))
             }
         } catch (e: Exception) {
         }
         return out
     }
 
-    private fun loadList(key: String): MutableList<Pair<String, String>> =
-        listCache.getOrPut(key) { parseList(key) }.toMutableList()
-
     private fun saveList(key: String, list: List<Pair<String, String>>) {
-        listCache[key] = list.toList()
         val arr = JSONArray()
-        for (p in list) arr.put(JSONObject().put("t", p.first).put("u", p.second))
+        for (p in list) {
+            arr.put(JSONObject().put("t", p.first).put("u", p.second))
+        }
         prefs.edit().putString(key, arr.toString()).apply()
     }
 
     private fun addHistory(title: String, url: String) {
-        val l = loadList("history")
-        l.removeAll { it.second == url }
-        l.add(0, Pair(title, url))
-        saveList("history", l.take(200))
+        val list = loadList("history")
+        list.removeAll { it.second == url }
+        list.add(0, Pair(title, url))
+        if (list.size > 200) list.subList(200, list.size).clear()
+        saveList("history", list)
     }
 
     private fun updateHistoryTitle(url: String, title: String) {
-        val l = loadList("history")
-        val idx = l.indexOfFirst { it.second == url }
-        if (idx >= 0 && l[idx].first != title) {
-            l[idx] = Pair(title, url)
-            saveList("history", l)
+        val list = loadList("history")
+        val i = list.indexOfFirst { it.second == url }
+        if (i >= 0 && list[i].first != title) {
+            list[i] = Pair(title, url)
+            saveList("history", list)
         }
     }
 
-    private fun addBookmark() {
-        val t = currentOrNull() ?: return
-        if (t.priv) {
-            toast("Can't bookmark in a private tab")
-            return
-        }
-        if (t.url.isEmpty()) {
-            toast("Open a page first")
-            return
-        }
-        val l = loadList("bookmarks")
-        if (l.any { it.second == t.url }) {
-            toast("Already bookmarked")
-            return
-        }
-        l.add(0, Pair(t.title, t.url))
-        saveList("bookmarks", l)
-        toast("Bookmarked")
-    }
+    // ---- Google Drive backup & restore (appDataFolder, user's own Drive) ----
 
-    private fun showList(title: String, key: String) {
-        val l = loadList(key)
-        if (l.isEmpty()) {
-            toast("Nothing here yet")
-            return
-        }
-        val labels = l.map { (if (it.first.isBlank()) it.second else it.first) + "\n" + it.second }.toTypedArray()
-        val b = dlg().setTitle(title)
-            .setItems(labels) { _, i -> pickItem(key, l[i]) }
-        if (key == "history") {
-            b.setNeutralButton("Clear all") { _, _ ->
-                confirm("Clear all history?", "This can't be undone.") {
-                    saveList(key, emptyList())
-                    toast("History cleared")
-                }
-            }
-        }
-        b.setNegativeButton("Close", null).show()
-    }
-
-    private fun pickItem(key: String, item: Pair<String, String>) {
-        dlg()
-            .setTitle(item.first.take(40))
-            .setItems(arrayOf("Open", "Open in new tab", "Delete")) { _, which ->
-                when (which) {
-                    0 -> currentOrNull()?.web?.loadUrl(item.second)
-                    1 -> newTab(item.second)
-                    2 -> {
-                        val l = loadList(key)
-                        l.removeAll { it.second == item.second }
-                        saveList(key, l)
-                        toast("Deleted")
-                    }
-                }
-            }.show()
-    }
-
-    private fun showTabs() {
-        val screenH = resources.displayMetrics.heightPixels
-        val (d, box) = newSheet((screenH * 0.74).toInt())
+    private fun showDriveBackupSheet() {
+        val (d, box) = newSheet(ViewGroup.LayoutParams.WRAP_CONTENT)
         sheetHandle(box)
-        val title = TextView(this)
-        title.textSize = 16f
-        title.setTextColor(INK)
-        title.setTypeface(title.typeface, Typeface.BOLD)
-        title.setPadding(dp(4), dp(4), dp(4), dp(8))
-        box.addView(title)
+        sheetTitle(box, "Google Drive backup", 4)
+        val sub = TextView(this)
+        sub.text = "Saves bookmarks, history, feeds and settings privately in your own Google Drive."
+        sub.textSize = 13f
+        sub.setTextColor(MUTE)
+        sub.setPadding(dp(4), 0, dp(4), dp(14))
+        box.addView(sub)
 
-        val searchTabs = EditText(this)
-        searchTabs.setSingleLine()
-        searchTabs.hint = "Search tabs..."
-        searchTabs.setHintTextColor(MUTE)
-        searchTabs.setTextColor(INK)
-        searchTabs.textSize = 14f
-        searchTabs.setPadding(dp(12), dp(8), dp(12), dp(8))
-        val sb = GradientDrawable()
-        sb.setColor(BG)
-        sb.cornerRadius = dp(14).toFloat()
-        searchTabs.background = sb
-        val searchLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        searchLp.bottomMargin = dp(10)
-        box.addView(searchTabs, searchLp)
-
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this)
-        list.orientation = LinearLayout.VERTICAL
-        scroll.addView(list)
-        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-
-        fun render() {
-            val q = searchTabs.text?.toString()?.trim() ?: ""
-            list.removeAllViews()
-            title.text = if (q.isEmpty()) "Tabs (" + tabs.size + ")" else "Tabs"
-            var shown = 0
-            for (i in tabs.indices) {
-                val tb = tabs[i]
-                if (q.isNotEmpty() && !tb.title.contains(q, true) && !tb.url.contains(q, true)) continue
-                shown++
-                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                lp.bottomMargin = dp(8)
-                list.addView(
-                    tabRow(tb, i == cur, {
-                        d.dismiss()
-                        switchTo(i)
-                    }, {
-                        closeTab(i)
-                        render()
-                    }),
-                    lp
-                )
-            }
-            if (shown == 0) {
-                val empty = TextView(this)
-                empty.text = "No matching tabs"
-                empty.textSize = 14f
-                empty.setTextColor(MUTE)
-                empty.gravity = Gravity.CENTER
-                empty.setPadding(0, dp(32), 0, dp(32))
-                list.addView(empty)
-            }
+        val last = prefs.getLong("drive_last_backup", 0L)
+        if (last > 0L) {
+            val stamp = DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
+            val badge = TextView(this)
+            badge.text = "Last backed up " + stamp
+            badge.textSize = 12f
+            badge.setTextColor(ROSE)
+            badge.setPadding(dp(4), 0, dp(4), dp(12))
+            box.addView(badge)
         }
-        searchTabs.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) { render() }
-        })
-        render()
 
-        val actions = LinearLayout(this)
-        actions.orientation = LinearLayout.HORIZONTAL
-        val leftLp = LinearLayout.LayoutParams(0, dp(46), 1f)
-        leftLp.rightMargin = dp(8)
-        actions.addView(pillButton("New tab", true) {
+        val bkIcon = icon("cloud", ROSE).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
+        box.addView(cardRow("Back up now", "Upload a fresh copy to Google Drive", bkIcon, true) {
             d.dismiss()
-            newTab(null)
-        }, leftLp)
-        actions.addView(pillButton("New private tab", false) {
-            d.dismiss()
-            newTab(null, true)
-        }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        val actionsLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        actionsLp.topMargin = dp(8)
-        box.addView(actions, actionsLp)
-
-        val sessions = LinearLayout(this)
-        sessions.orientation = LinearLayout.HORIZONTAL
-        val sLeft = LinearLayout.LayoutParams(0, dp(46), 1f)
-        sLeft.rightMargin = dp(8)
-        sessions.addView(pillButton("Save these tabs", false) {
-            d.dismiss()
-            saveOpenTabsSession()
-        }, sLeft)
-        sessions.addView(pillButton("Saved sessions", false) {
-            d.dismiss()
-            showSavedSessions()
-        }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        val sessionsLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        sessionsLp.topMargin = dp(8)
-        box.addView(sessions, sessionsLp)
-        d.show()
-    }
-
-    private class MenuRow(val label: String, val value: String?, val danger: Boolean, val stay: Boolean = false, val action: () -> Unit)
-
-    private class MenuHeader(val label: String)
-
-    private fun showMenu() {
-        val t = currentOrNull() ?: return
-        val rows: List<Any> = listOf(
-            MenuHeader("Library"),
-            MenuRow("Bookmarks", null, false) { showBookmarks() },
-            MenuRow("Reading list", "${loadList("reading_list").size}", false) { showReadingList() },
-            MenuRow("History", null, false) { openHistoryPage() },
-            MenuRow("Downloads", null, false) { showDownloads() },
-            MenuHeader("This page"),
-            MenuRow("Find in page", null, false) { findInPage() },
-            MenuRow("Reading mode", if (t.readerUrl != null) "On" else "Off", false) { toggleReader() },
-            MenuRow("Translate page", null, false) { translateCurrentPage() },
-            MenuRow("Desktop site", if (t.desktop) "On" else "Off", false) { toggleDesktop() },
-            MenuRow("Add to home screen", null, false) { addToHomeScreen() },
-            MenuHeader("More"),
-            MenuRow("Settings", null, false) { showSettings() }
-        )
-        val screenH = resources.displayMetrics.heightPixels
-        val h = minOf(dp(170 + rows.size * 49), (screenH * 0.85).toInt())
-        val (d, box) = newSheet(h)
-        sheetHandle(box)
-
-        val quick = LinearLayout(this)
-        quick.orientation = LinearLayout.HORIZONTAL
-        quick.setPadding(0, dp(4), 0, dp(12))
-        val qLp = { LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f) }
-        quick.addView(quickAction("plus", "New tab") {
-            d.dismiss()
-            newTab(null)
-        }, qLp())
-        quick.addView(quickAction("shield", "Private") {
-            d.dismiss()
-            newTab(null, true)
-        }, qLp())
-        quick.addView(quickAction("star", "Bookmark") {
-            d.dismiss()
-            addBookmark()
-        }, qLp())
-        quick.addView(quickAction("share", "Share") {
-            d.dismiss()
-            sharePage()
-        }, qLp())
-        box.addView(quick)
-
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this)
-        list.orientation = LinearLayout.VERTICAL
-        addMenuRows(list, rows) { mr ->
-            d.dismiss()
-            mr.action()
-        }
-        scroll.addView(list)
-        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        d.show()
-    }
-
-    private fun showSettings() {
-        val (d, _, list) = listSheet("Settings", 14)
-        fun render() {
-            list.removeAllViews()
-            val rows: List<Any> = listOf(
-                MenuHeader("Account"),
-                MenuRow("Google account", driveAccount()?.name ?: "Not signed in", false) { showAccountSheet() },
-                MenuHeader("Privacy"),
-                MenuRow("Ad & tracker blocking", if (adBlockOn) "On" else "Off", false, true) { toggleAdBlock() },
-                MenuRow("Third-party cookies", if (thirdPartyCookies()) "Allowed" else "Blocked", false, true) { toggleThirdPartyCookies() },
-                MenuRow("Per-site settings", null, false) { showPerSiteSettingsDialog() },
-                MenuRow("Site permissions", null, false) { showSitePermissionsManager() },
-                MenuRow("Clear browsing data", null, true) {
-                    confirm(
-                        "Clear browsing data?",
-                        "This deletes history, cookies, cache and saved site data, and signs you out of websites."
-                    ) { clearData() }
-                },
-                MenuHeader("Search and homepage"),
-                MenuRow("Search engine", allEngines().first { it.second == searchBase() }.first, false) { chooseEngine() },
-                MenuRow("Default domain ending", defaultTld(), false) { chooseTld() },
-                MenuRow("Homepage theme", homeThemeMode().replaceFirstChar { it.uppercase() }, false, true) { toggleHomeTheme() },
-                MenuRow("Homepage site icons", if (siteIcons()) "On" else "Off", false, true) { toggleIcons() },
-                MenuRow("Custom video channels", null, false) { showCustomFeedManager(true) },
-                MenuRow("Custom news feeds", null, false) { showCustomFeedManager(false) },
-                MenuHeader("Display"),
-                MenuRow("Page text size", getTextZoom().toString() + "%", false) { chooseTextSize() },
-                MenuRow("Toolbars", if (barsHidden) "Hidden" else "Visible", false, true) { setBarsHidden(!barsHidden) },
-                MenuRow("Suggest reading mode", if (suggestReader()) "On" else "Off", false, true) {
-                    prefs.edit().putBoolean("reader_suggest", !suggestReader()).apply()
-                },
-                MenuHeader("Advanced"),
-                MenuRow("Export / Import JSON", null, false) { showJsonExportImport() },
-                MenuRow("Scan QR code", null, false) { launchQrScanner() },
-                MenuRow("360 / VR video viewer", null, false) { openVrViewer() },
-                MenuRow("Diagnostics", null, false) { showDiagnostics() }
-            )
-            addMenuRows(list, rows) { mr ->
-                if (mr.stay) {
-                    mr.action()
-                    render()
-                } else {
-                    d.dismiss()
-                    mr.action()
-                }
-            }
-        }
-        render()
-        d.show()
-    }
-
-    private val zoomChoices = listOf(100, 115, 125, 135, 150)
-
-    private fun getTextZoom(): Int = prefs.getInt("text_zoom", 115)
-
-    private fun chooseTextSize() {
-        val labels = zoomChoices.map { if (it == 100) "100% (Standard)" else it.toString() + "%" }
-        val idx = zoomChoices.indexOf(getTextZoom()).coerceAtLeast(0)
-        showChoiceSheet("Page text size", labels, idx) { i ->
-            val z = zoomChoices[i]
-            prefs.edit().putInt("text_zoom", z).apply()
-            for (tab in tabs) tab.web.settings.textZoom = z
-            toast("Text size: " + z + "%")
-        }
-    }
-
-    private fun toggleDesktop() {
-        val t = currentOrNull() ?: return
-        t.desktop = !t.desktop
-        t.autoDesktopSite = null // the user's choice wins over the automatic one
-        applyClientIdentity(t.web.settings, t.desktop, true)
-        t.web.reload()
-        toast(if (t.desktop) "Desktop site on" else "Desktop site off")
-    }
-
-    private fun sharePage() {
-        val u = currentOrNull()?.url ?: return
-        if (u.isEmpty()) {
-            toast("Open a page first")
-            return
-        }
-        val (d, _, list) = listSheet("Share page", 2)
-        list.addView(cardRow("Share link", u, null) {
-            d.dismiss()
-            shareText(u)
+            beginDriveAction(DriveAction.BACKUP)
         }, rowLp())
-        list.addView(cardRow("Copy link", null, null) {
+
+        val rsIcon = icon("download", INK).apply { layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)) }
+        box.addView(cardRow("Restore from Drive", "Replace local data with your saved backup", rsIcon, false) {
             d.dismiss()
-            copyLink()
-        }, rowLp())
+            dlg()
+                .setTitle("Restore from Google Drive?")
+                .setMessage("This will replace your current bookmarks, history, feeds and settings with the backup in your Google Drive.")
+                .setPositiveButton("Restore") { _, _ -> beginDriveAction(DriveAction.RESTORE) }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }, rowLp(0))
         d.show()
     }
 
-    private fun clearData() {
-        for (t in tabs) {
-            t.web.clearCache(true)
-            t.web.clearFormData()
-            t.web.clearSslPreferences()
-            if (!t.priv) t.web.clearHistory()
-        }
-        runIo {
-            File(filesDir, "tabs.json").delete()
-            File(filesDir, "tabs.bin").delete()
-            File(filesDir, "vids_cache_v2.json").delete()
-            File(filesDir, "news_cache_v3.json").delete()
-        }
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
-        WebStorage.getInstance().deleteAllData()
-        GeolocationPermissions.getInstance().clearAll()
-        saveList("history", emptyList())
-        prefs.edit().remove("recent_searches").remove("read_urls").remove("click_counts").remove("user_interests").apply()
-        synchronized(statsLock) {
-            readList = null
-            clickMap = null
-            interests = null
-        }
-        linkTitles.clear()
-        runIo { filesDir.listFiles()?.filter { it.name.startsWith("offline_") }?.forEach { it.delete() } }
-        toast("Browsing data cleared")
-    }
-
-    private fun attachTabSwipeGestures(target: View) {
-        val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                val start = e1 ?: return false
-                val dx = e2.x - start.x
-                val dy = e2.y - start.y
-                if (Math.abs(dx) > dp(72) && Math.abs(dx) > Math.abs(dy) * 1.5f && tabs.size > 1) {
-                    if (dx < 0) {
-                        switchTo((cur + 1) % tabs.size)
-                    } else {
-                        switchTo((cur - 1 + tabs.size) % tabs.size)
-                    }
-                    return true
-                }
-                return false
-            }
-        })
-        target.setOnTouchListener { _, event ->
-            detector.onTouchEvent(event)
-            false
-        }
-    }
-
-    private fun saveCurrentToReadingList() {
-        val t = currentOrNull() ?: return
-        if (t.url.isEmpty() || !isHttp(t.url)) {
-            toast("Open a web page first")
-            return
-        }
-        val list = loadList("reading_list")
-        if (list.none { it.second == t.url }) {
-            list.add(0, Pair(t.title, t.url))
-            saveList("reading_list", list.take(200))
-        }
-        toast("Saved to reading list")
-    }
-
-    private fun showReadingList() {
-        val (d, box, list) = listSheet("Reading list", 6)
-        fun render() {
-            val items = loadList("reading_list")
-            list.removeAllViews()
-            if (items.isEmpty()) {
-                list.addView(emptyNote("Nothing saved yet"))
-                return
-            }
-            for (item in items) {
-                val x = icon("close", INK)
-                x.setPadding(dp(12), dp(12), dp(12), dp(12))
-                x.contentDescription = "Remove from reading list"
-                x.background = ripple()
-                x.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
-                x.setOnClickListener {
-                    val latest = loadList("reading_list")
-                    latest.removeAll { it.second == item.second }
-                    saveList("reading_list", latest)
-                    render()
-                }
-                val host = Uri.parse(item.second).host?.removePrefix("www.") ?: item.second
-                list.addView(cardRow(if (item.first.isBlank()) host else item.first, host, x) {
-                    d.dismiss()
-                    currentOrNull()?.let { navigate(it, item.second) }
-                }, rowLp())
-            }
-        }
-        render()
-        val actions = LinearLayout(this)
-        actions.orientation = LinearLayout.HORIZONTAL
-        val leftLp = LinearLayout.LayoutParams(0, dp(46), 1f)
-        leftLp.rightMargin = dp(8)
-        actions.addView(pillButton("Save this page", true) {
-            saveCurrentToReadingList()
-            render()
-        }, leftLp)
-        actions.addView(pillButton("Clear all", false) {
-            confirm("Clear reading list?", "This removes every saved page.") {
-                saveList("reading_list", emptyList())
-                render()
-            }
-        }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        val actionsLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        actionsLp.topMargin = dp(8)
-        box.addView(actions, actionsLp)
-        d.show()
-    }
-
-    private fun translateCurrentPage() {
-        val t = currentOrNull() ?: return
-        if (t.url.isEmpty() || !isHttp(t.url)) {
-            toast("Open a web page first")
-            return
-        }
-        val target = "https://translate.google.com/translate?u=" + Uri.encode(t.url)
-        navigate(t, target)
-    }
-
-    // ---- per-site settings and permissions ----
-    private data class SitePref(
-        val desktop: Boolean? = null,
-        val adBlock: Boolean? = null,
-        val thirdPartyCookies: Boolean? = null,
-        val javaScript: Boolean? = null
-    )
-
-    @Volatile private var sitePrefCache: Map<String, SitePref>? = null
-
-    private fun loadSitePrefs(): MutableMap<String, SitePref> {
-        val out = mutableMapOf<String, SitePref>()
-        try {
-            val root = JSONObject(prefs.getString("site_prefs_json", "{}") ?: "{}")
-            val it = root.keys()
-            while (it.hasNext()) {
-                val host = it.next()
-                val o = root.optJSONObject(host) ?: continue
-                out[host] = SitePref(
-                    desktop = if (o.has("desktop")) o.optBoolean("desktop") else null,
-                    adBlock = if (o.has("adBlock")) o.optBoolean("adBlock") else null,
-                    thirdPartyCookies = if (o.has("tpc")) o.optBoolean("tpc") else null,
-                    javaScript = if (o.has("js")) o.optBoolean("js") else null
-                )
-            }
-        } catch (_: Exception) {
-        }
-        return out
-    }
-
-    private fun saveSitePrefs(map: Map<String, SitePref>) {
-        val root = JSONObject()
-        for ((host, p) in map) {
-            val o = JSONObject()
-            p.desktop?.let { o.put("desktop", it) }
-            p.adBlock?.let { o.put("adBlock", it) }
-            p.thirdPartyCookies?.let { o.put("tpc", it) }
-            p.javaScript?.let { o.put("js", it) }
-            root.put(host, o)
-        }
-        prefs.edit().putString("site_prefs_json", root.toString()).apply()
-        sitePrefCache = map.toMap()
-    }
-
-    private fun sitePrefFor(host: String?): SitePref? {
-        if (host == null) return null
-        val cache = sitePrefCache ?: loadSitePrefs().toMap().also { sitePrefCache = it }
-        return cache[host]
-    }
-
-    /** Whether ad blocking applies on [pageHost]: a per-site choice wins over the global switch and the pause list. */
-    private fun isHostAdBlockEnabled(pageHost: String?): Boolean {
-        sitePrefFor(pageHost)?.adBlock?.let { return it }
-        return adBlockOn && (pageHost == null || !pausedHosts.contains(pageHost))
-    }
-
-    /** Applies the saved per-site settings (if any) for [url] to [tab]. */
-    private fun applySiteSettingsForUrl(tab: Tab, url: String) {
-        val host = hostOf(url) ?: return
-        val pref = sitePrefFor(host)
-        tab.web.settings.javaScriptEnabled = pref?.javaScript ?: true
-        if (!tab.priv) {
-            CookieManager.getInstance()
-                .setAcceptThirdPartyCookies(tab.web, pref?.thirdPartyCookies ?: thirdPartyCookies())
-        }
-        val wantDesktop = pref?.desktop
-        if (wantDesktop != null && wantDesktop != tab.desktop) {
-            tab.desktop = wantDesktop
-            tab.autoDesktopSite = null
-            applyClientIdentity(tab.web.settings, tab.desktop, true)
-        }
-    }
-
-    /** Returns "allow", "block" or "ask" for [origin] and [perm] (camera, microphone, location). */
-    private fun getSitePermission(origin: String, perm: String): String {
-        return try {
-            JSONObject(prefs.getString("site_perms_json", "{}") ?: "{}")
-                .optJSONObject(origin)?.optString(perm, "ask")?.ifEmpty { "ask" } ?: "ask"
-        } catch (_: Exception) {
-            "ask"
-        }
-    }
-
-    private fun setSitePermission(origin: String, perm: String, state: String) {
-        val root = try {
-            JSONObject(prefs.getString("site_perms_json", "{}") ?: "{}")
-        } catch (_: Exception) {
-            JSONObject()
-        }
-        val o = root.optJSONObject(origin) ?: JSONObject()
-        o.put(perm, state)
-        root.put(origin, o)
-        prefs.edit().putString("site_perms_json", root.toString()).apply()
-    }
-
-    private fun savedPermissionOrigins(): List<String> {
-        val out = mutableListOf<String>()
-        try {
-            val keys = JSONObject(prefs.getString("site_perms_json", "{}") ?: "{}").keys()
-            while (keys.hasNext()) out.add(keys.next())
-        } catch (_: Exception) {
-        }
-        return out
-    }
-
-    private fun clearSitePermissions(origin: String) {
-        try {
-            val root = JSONObject(prefs.getString("site_perms_json", "{}") ?: "{}")
-            root.remove(origin)
-            prefs.edit().putString("site_perms_json", root.toString()).apply()
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun showSitePermissionsManager() {
-        if (savedPermissionOrigins().isEmpty()) {
-            toast("No saved site permissions yet")
-            return
-        }
-        val (d, _, list) = listSheet("Site permissions", 4)
-        fun render() {
-            list.removeAllViews()
-            val origins = savedPermissionOrigins()
-            if (origins.isEmpty()) {
-                list.addView(emptyNote("No saved site permissions"))
-                return
-            }
-            for (origin in origins) {
-                val card = LinearLayout(this)
-                card.orientation = LinearLayout.VERTICAL
-                val bg = GradientDrawable()
-                bg.setColor(BAR)
-                bg.cornerRadius = dp(16).toFloat()
-                card.background = bg
-                card.setPadding(dp(14), dp(12), dp(14), dp(10))
-                val head = TextView(this)
-                head.text = origin.removePrefix("https://").removePrefix("http://")
-                head.textSize = 15f
-                head.setTextColor(INK)
-                head.setTypeface(head.typeface, Typeface.BOLD)
-                head.maxLines = 1
-                head.ellipsize = TextUtils.TruncateAt.END
-                card.addView(head)
-                for (perm in listOf("camera", "microphone", "location")) {
-                    val line = LinearLayout(this)
-                    line.orientation = LinearLayout.HORIZONTAL
-                    line.gravity = Gravity.CENTER_VERTICAL
-                    line.setPadding(0, dp(8), 0, 0)
-                    val lbl = TextView(this)
-                    lbl.text = perm.replaceFirstChar { it.uppercase() }
-                    lbl.textSize = 13f
-                    lbl.setTextColor(MUTE)
-                    line.addView(lbl, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                    val current = getSitePermission(origin, perm)
-                    for (state in listOf("allow", "ask", "block")) {
-                        val chip = stateChip(state.replaceFirstChar { it.uppercase() }, current == state)
-                        chip.setOnClickListener {
-                            setSitePermission(origin, perm, state)
-                            render()
-                        }
-                        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                        lp.leftMargin = dp(6)
-                        line.addView(chip, lp)
-                    }
-                    card.addView(line)
-                }
-                val remove = TextView(this)
-                remove.text = "Remove saved choices"
-                remove.textSize = 13f
-                remove.setTextColor(ROSE)
-                remove.setPadding(0, dp(12), 0, dp(2))
-                remove.setOnClickListener {
-                    clearSitePermissions(origin)
-                    render()
-                }
-                card.addView(remove)
-                list.addView(card, rowLp())
-            }
-        }
-        render()
-        d.show()
-    }
-
-    private fun showPerSiteSettingsDialog() {
-        val t = currentOrNull() ?: return
-        val host = hostOf(t.url)
-        if (host == null) {
-            toast("Open a website first")
-            return
-        }
-        val (d, _, list) = listSheet(host, 5)
-
-        fun effective(p: SitePref) = booleanArrayOf(
-            p.desktop ?: t.desktop,
-            p.adBlock ?: (adBlockOn && !pausedHosts.contains(host)),
-            p.thirdPartyCookies ?: thirdPartyCookies(),
-            p.javaScript ?: t.web.settings.javaScriptEnabled
-        )
-
-        val names = listOf(
-            "Desktop site" to "Load the desktop version of this site",
-            "Ad & tracker blocking" to "Block known ad and tracker hosts here",
-            "Third-party cookies" to "Let embedded content set cookies",
-            "JavaScript" to "Turn off only if a page misbehaves"
-        )
-
-        fun render() {
-            val map = loadSitePrefs()
-            val eff = effective(map[host] ?: SitePref())
-            list.removeAllViews()
-            for (i in names.indices) {
-                val on = eff[i]
-                list.addView(cardRow(names[i].first, names[i].second, stateChip(if (on) "ON" else "OFF", on)) {
-                    val latest = loadSitePrefs()
-                    val c = latest[host] ?: SitePref()
-                    val e = effective(c)
-                    latest[host] = when (i) {
-                        0 -> c.copy(desktop = !e[0])
-                        1 -> c.copy(adBlock = !e[1])
-                        2 -> c.copy(thirdPartyCookies = !e[2])
-                        else -> c.copy(javaScript = !e[3])
-                    }
-                    saveSitePrefs(latest)
-                    applySiteSettingsForUrl(t, t.url)
-                    t.web.reload()
-                    render()
-                }, rowLp())
-            }
-            if (map.containsKey(host)) {
-                list.addView(cardRow("Reset to defaults", "Forget the choices saved for this site", null) {
-                    val latest = loadSitePrefs()
-                    latest.remove(host)
-                    saveSitePrefs(latest)
-                    applySiteSettingsForUrl(t, t.url)
-                    t.web.reload()
-                    render()
-                }, rowLp())
-            }
-        }
-        render()
-        d.show()
-    }
-
-    private fun saveOpenTabsSession() {
-        val nameInput = EditText(this)
-        nameInput.setSingleLine()
-        nameInput.hint = "Session name (e.g. Work Session)"
-        dlg()
-            .setTitle("Save open tabs")
-            .setView(nameInput)
-            .setPositiveButton("Save") { _, _ ->
-                val label = nameInput.text.toString().trim().ifEmpty { "Session ${System.currentTimeMillis() % 10000}" }
-                val tabArr = JSONArray()
-                for (tb in tabs) {
-                    if (tb.priv) continue
-                    tabArr.put(
-                        JSONObject()
-                            .put("title", tb.title)
-                            .put("url", tb.url)
-                            .put("desktop", tb.desktop)
-                    )
-                }
-                val sessions = try {
-                    JSONArray(prefs.getString("saved_tab_sessions", "[]"))
-                } catch (_: Exception) {
-                    JSONArray()
-                }
-                sessions.put(JSONObject().put("name", label).put("tabs", tabArr))
-                prefs.edit().putString("saved_tab_sessions", sessions.toString()).apply()
-                toast("Saved \"$label\"")
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showSavedSessions() {
-        val sessions = try {
-            JSONArray(prefs.getString("saved_tab_sessions", "[]"))
-        } catch (_: Exception) {
-            JSONArray()
-        }
-        if (sessions.length() == 0) {
-            toast("No saved tab sessions")
-            return
-        }
-        val names = Array(sessions.length()) { idx ->
-            val obj = sessions.optJSONObject(idx)
-            val n = obj?.optString("name", "Session") ?: "Session"
-            val count = obj?.optJSONArray("tabs")?.length() ?: 0
-            "$n ($count tabs)"
-        }
-        dlg()
-            .setTitle("Saved tab sessions")
-            .setItems(names) { _, idx ->
-                val sessionTabs = sessions.optJSONObject(idx)?.optJSONArray("tabs") ?: return@setItems
-                for (i in 0 until sessionTabs.length()) {
-                    val item = sessionTabs.optJSONObject(i) ?: continue
-                    val u = item.optString("url", "")
-                    newTab(if (u.isEmpty()) null else u, false)
-                }
-            }
-            .setNegativeButton("Close", null)
-            .show()
-    }
-
-    private fun driveAccount(): DriveBackup.Account? {
-        val name = prefs.getString("drive_name", null) ?: return null
-        val email = prefs.getString("drive_email", "") ?: ""
-        val photo = prefs.getString("drive_photo", null)
-        return DriveBackup.Account(name, email, photo)
-    }
-
-    private fun saveDriveAccount(account: DriveBackup.Account?) {
-        prefs.edit().apply {
-            if (account == null) {
-                remove("drive_name").remove("drive_email").remove("drive_photo").remove("drive_last_backup")
-            } else {
-                putString("drive_name", account.name)
-                putString("drive_email", account.email)
-                if (account.photoUrl != null) putString("drive_photo", account.photoUrl)
-            }
-        }.apply()
-    }
-
-    /** Everything a backup restores: bookmarks, reading list, custom feeds, site settings and preferences. */
-    private fun buildBackupJson(): String {
-        val root = JSONObject()
-        root.put("bookmarks", JSONArray(loadList("bookmarks").map { JSONObject().put("t", it.first).put("u", it.second) }))
-        root.put("reading_list", JSONArray(loadList("reading_list").map { JSONObject().put("t", it.first).put("u", it.second) }))
-        root.put("custom_news_feeds", JSONArray(getCustomFeeds("custom_news_feeds").map { JSONObject().put("t", it.first).put("u", it.second) }))
-        root.put("custom_video_feeds", JSONArray(getCustomFeeds("custom_video_feeds").map { JSONObject().put("t", it.first).put("u", it.second) }))
-        val sites = JSONObject()
-        for ((host, p) in loadSitePrefs()) {
-            val o = JSONObject()
-            p.desktop?.let { o.put("desktop", it) }
-            p.adBlock?.let { o.put("adBlock", it) }
-            p.thirdPartyCookies?.let { o.put("tpc", it) }
-            p.javaScript?.let { o.put("js", it) }
-            sites.put(host, o)
-        }
-        root.put("site_prefs", sites)
-        val settings = JSONObject()
-        for (key in listOf("search", "tld", "text_zoom", "home_theme", "icons", "reader_suggest", "adblock", "news_open", "sec_top", "sec_recent", "sec_marks", "sec_vids")) {
-            when (val v = prefs.all[key]) {
-                is Boolean -> settings.put(key, v)
-                is Int -> settings.put(key, v)
-                is String -> settings.put(key, v)
-                else -> {}
-            }
-        }
-        root.put("settings", settings)
-        root.put("backed_up_at", System.currentTimeMillis())
-        return root.toString()
-    }
-
-    private fun applyBackupJson(json: String) {
-        val root = JSONObject(json)
-        root.optJSONArray("bookmarks")?.let { arr ->
-            val out = mutableListOf<Pair<String, String>>()
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val u = o.optString("u", "")
-                if (u.isNotBlank()) out.add(Pair(o.optString("t", ""), u))
-            }
-            saveList("bookmarks", out)
-        }
-        root.optJSONArray("reading_list")?.let { arr ->
-            val out = mutableListOf<Pair<String, String>>()
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val u = o.optString("u", "")
-                if (u.isNotBlank()) out.add(Pair(o.optString("t", ""), u))
-            }
-            saveList("reading_list", out)
-        }
-        for (key in listOf("custom_news_feeds", "custom_video_feeds")) {
-            root.optJSONArray(key)?.let { arr ->
-                val out = mutableListOf<Pair<String, String>>()
-                for (i in 0 until arr.length()) {
-                    val o = arr.optJSONObject(i) ?: continue
-                    val u = o.optString("u", "")
-                    if (u.isNotBlank()) out.add(Pair(o.optString("t", ""), u))
-                }
-                saveCustomFeeds(key, out)
-            }
-        }
-        root.optJSONObject("site_prefs")?.let { sites ->
-            val map = mutableMapOf<String, SitePref>()
-            val it = sites.keys()
-            while (it.hasNext()) {
-                val host = it.next()
-                val o = sites.optJSONObject(host) ?: continue
-                map[host] = SitePref(
-                    desktop = if (o.has("desktop")) o.optBoolean("desktop") else null,
-                    adBlock = if (o.has("adBlock")) o.optBoolean("adBlock") else null,
-                    thirdPartyCookies = if (o.has("tpc")) o.optBoolean("tpc") else null,
-                    javaScript = if (o.has("js")) o.optBoolean("js") else null
-                )
-            }
-            saveSitePrefs(map)
-        }
-        root.optJSONObject("settings")?.let { settings ->
-            val editor = prefs.edit()
-            val it = settings.keys()
-            while (it.hasNext()) {
-                val key = it.next()
-                when (val v = settings.opt(key)) {
-                    is Boolean -> editor.putBoolean(key, v)
-                    is Int -> editor.putInt(key, v)
-                    is String -> editor.putString(key, v)
-                    else -> {}
-                }
-            }
-            editor.apply()
-        }
-        adBlockOn = prefs.getBoolean("adblock", true)
-        reloadStartIfShown()
-    }
-
-    private fun startDriveSignIn() {
-        if (!DriveBackup.isConfigured()) {
-            toast("Google Drive backup isn't set up yet")
-            return
-        }
+    private fun beginDriveAction(action: DriveAction) {
+        toast("Connecting to Google Drive…")
         lifecycleScope.launch {
-            val account = DriveBackup.signIn(this@MainActivity)
-            if (account != null) {
-                saveDriveAccount(account)
-                toast("Signed in as " + account.name)
-            } else {
-                toast("Sign-in was cancelled")
-            }
-        }
-    }
-
-    private fun startDriveSignOut() {
-        lifecycleScope.launch {
-            DriveBackup.signOut(this@MainActivity)
-            saveDriveAccount(null)
-            toast("Signed out")
-        }
-    }
-
-    private fun startDriveAction(action: DriveAction) {
-        if (driveAccount() == null) {
-            toast("Sign in first")
-            return
-        }
-        lifecycleScope.launch {
-            when (val outcome = DriveBackup.requestAccessToken(this@MainActivity)) {
-                is DriveBackup.AuthOutcome.Token -> runDriveAction(action, outcome.accessToken)
-                is DriveBackup.AuthOutcome.NeedsConsent -> {
+            when (val auth = DriveBackup.authorize(this@MainActivity)) {
+                is DriveBackup.Auth.Ready -> runDriveAction(action, auth.token)
+                is DriveBackup.Auth.NeedsConsent -> {
                     pendingDriveAction = action
-                    driveConsent.launch(outcome.request)
+                    driveConsent.launch(auth.request)
                 }
-                is DriveBackup.AuthOutcome.Failed -> toast("Couldn't reach Google Drive")
+                is DriveBackup.Auth.Failed -> toast(auth.message)
             }
         }
     }
@@ -4963,186 +4518,262 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px}
         lifecycleScope.launch {
             when (action) {
                 DriveAction.BACKUP -> {
-                    val ok = DriveBackup.uploadBackup(token, buildBackupJson())
-                    if (ok) {
+                    toast("Backing up…")
+                    val err = DriveBackup.upload(token, buildBackupPayload())
+                    if (err == null) {
                         prefs.edit().putLong("drive_last_backup", System.currentTimeMillis()).apply()
                         toast("Backed up to Google Drive")
                     } else {
-                        toast("Backup failed")
+                        toast(err)
                     }
                 }
                 DriveAction.RESTORE -> {
-                    val json = DriveBackup.downloadBackup(token)
-                    if (json != null) {
-                        applyBackupJson(json)
-                        toast("Restored from Google Drive")
+                    toast("Restoring…")
+                    val (json, err) = DriveBackup.download(token)
+                    if (json == null) {
+                        toast(err ?: "Restore failed")
+                    } else if (applyBackupPayload(json)) {
+                        toast("Backup restored")
                     } else {
-                        toast("No backup found on this account")
+                        toast("Backup file could not be read")
                     }
                 }
             }
         }
     }
 
-    private fun showAccountSheet() {
-        val (d, box, list) = listSheet("Google account", 3)
-        fun render() {
-            list.removeAllViews()
-            val account = driveAccount()
-            if (account == null) {
-                list.addView(emptyNote("Not signed in"))
-            } else {
-                val lastBackup = prefs.getLong("drive_last_backup", 0L)
-                val sub = account.email + (if (lastBackup > 0) "  \u00b7  Backed up " + DateUtils.getRelativeTimeSpanString(lastBackup) else "")
-                list.addView(cardRow(account.name, sub.toString(), null, false, null), rowLp())
+    private fun buildBackupPayload(): String {
+        val root = JSONObject()
+        root.put("version", 1)
+        root.put("createdAt", System.currentTimeMillis())
+        root.put("bookmarks", JSONArray(prefs.getString("bookmarks", "[]")))
+        root.put("history", JSONArray(prefs.getString("history", "[]")))
+        root.put("recent_searches", JSONArray(prefs.getString("recent_searches", "[]")))
+        root.put("custom_news_feeds", JSONArray(prefs.getString("custom_news_feeds", "[]")))
+        root.put("custom_video_feeds", JSONArray(prefs.getString("custom_video_feeds", "[]")))
+        val settings = JSONObject()
+        prefs.getString("search", null)?.let { settings.put("search", it) }
+        prefs.getString("tld", null)?.let { settings.put("tld", it) }
+        prefs.getString("home_theme", null)?.let { settings.put("home_theme", it) }
+        settings.put("icons", prefs.getBoolean("icons", true))
+        settings.put("adblock", adBlockOn)
+        settings.put("adblock_paused", JSONArray(pausedHosts.toList()))
+        settings.put("tpc", thirdPartyCookies())
+        settings.put("news_open", isSecOpen("news_open"))
+        settings.put("reader_suggest", suggestReader())
+        settings.put("text_zoom", getTextZoom())
+        settings.put("site_settings", JSONObject(prefs.getString("site_settings", "{}") ?: "{}"))
+        root.put("settings", settings)
+        return root.toString()
+    }
+
+    private fun applyBackupPayload(raw: String): Boolean {
+        val root = try {
+            JSONObject(raw)
+        } catch (e: Exception) {
+            return false
+        }
+        val edit = prefs.edit()
+        for (k in listOf("bookmarks", "history", "recent_searches", "custom_news_feeds", "custom_video_feeds")) {
+            root.optJSONArray(k)?.let { edit.putString(k, it.toString()) }
+        }
+        val s = root.optJSONObject("settings")
+        if (s != null) {
+            if (s.has("search")) edit.putString("search", s.optString("search"))
+            if (s.has("tld")) edit.putString("tld", s.optString("tld"))
+            if (s.has("home_theme")) edit.putString("home_theme", s.optString("home_theme"))
+            if (s.has("icons")) edit.putBoolean("icons", s.optBoolean("icons", true))
+            if (s.has("adblock")) edit.putBoolean("adblock", s.optBoolean("adblock", true))
+            if (s.has("tpc")) edit.putBoolean("tpc", s.optBoolean("tpc", true))
+            if (s.has("news_open")) edit.putBoolean("news_open", s.optBoolean("news_open", false))
+            if (s.has("reader_suggest")) edit.putBoolean("reader_suggest", s.optBoolean("reader_suggest", true))
+            if (s.has("text_zoom")) edit.putInt("text_zoom", s.optInt("text_zoom", 100).coerceIn(75, 200))
+            s.optJSONObject("site_settings")?.let { edit.putString("site_settings", it.toString()) }
+            s.optJSONArray("adblock_paused")?.let { arr ->
+                val set = mutableSetOf<String>()
+                for (i in 0 until arr.length()) set.add(arr.optString(i))
+                edit.putStringSet("adblock_paused", set)
             }
         }
-        render()
-        val actions = LinearLayout(this)
-        actions.orientation = LinearLayout.HORIZONTAL
-        val leftLp = LinearLayout.LayoutParams(0, dp(46), 1f)
-        leftLp.rightMargin = dp(8)
-        if (driveAccount() == null) {
-            actions.addView(pillButton("Sign in with Google", true) {
-                startDriveSignIn()
-                d.dismiss()
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)))
-        } else {
-            actions.addView(pillButton("Back up now", true) {
-                startDriveAction(DriveAction.BACKUP)
-                d.dismiss()
-            }, leftLp)
-            actions.addView(pillButton("Restore", false) {
-                confirm("Restore from Google Drive?", "This replaces bookmarks, reading list and settings on this device with the backed-up copy.") {
-                    startDriveAction(DriveAction.RESTORE)
+        edit.apply()
+        loadAdBlockSettings()
+        val zoom = getTextZoom()
+        for (t in tabs) {
+            t.web.settings.textZoom = zoom
+            if (!t.priv) CookieManager.getInstance().setAcceptThirdPartyCookies(t.web, thirdPartyCookies())
+        }
+        reloadStartIfShown()
+        refreshNews()
+        refreshVideos()
+        return true
+    }
+
+    // ---- Site permissions (remembered per origin) ----
+
+    private fun getSitePermission(origin: String, type: String): String {
+        return try {
+            val root = JSONObject(prefs.getString("site_perms", "{}"))
+            root.optJSONObject(origin)?.optString(type, "ask") ?: "ask"
+        } catch (e: Exception) {
+            "ask"
+        }
+    }
+
+    private fun setSitePermission(origin: String, type: String, state: String) {
+        try {
+            val root = JSONObject(prefs.getString("site_perms", "{}"))
+            val site = root.optJSONObject(origin) ?: JSONObject()
+            if (state == "ask") site.remove(type) else site.put(type, state)
+            if (site.length() == 0) root.remove(origin) else root.put(origin, site)
+            prefs.edit().putString("site_perms", root.toString()).apply()
+        } catch (e: Exception) {
+        }
+    }
+
+    // ---- Per-site settings & text size ----
+
+    private fun getTextZoom(): Int = prefs.getInt("text_zoom", 100).coerceIn(75, 200)
+
+    private fun setTextZoom(zoom: Int) {
+        val z = zoom.coerceIn(75, 200)
+        prefs.edit().putInt("text_zoom", z).apply()
+        for (t in tabs) t.web.settings.textZoom = z
+        toast("Text size: $z%")
+    }
+
+    private fun chooseTextZoom() {
+        val levels = listOf(85, 100, 115, 130, 150)
+        val idx = levels.indexOf(getTextZoom()).let { if (it < 0) 1 else it }
+        showChoiceSheet("Text size", levels.map { "$it%" }, idx) { i -> setTextZoom(levels[i]) }
+    }
+
+    private fun getSiteSettingsMap(): JSONObject {
+        return try {
+            JSONObject(prefs.getString("site_settings", "{}"))
+        } catch (e: Exception) {
+            JSONObject()
+        }
+    }
+
+    private fun isHostAdBlockEnabled(host: String?): Boolean {
+        if (!adBlockOn) return false
+        if (host == null) return true
+        val site = getSiteSettingsMap().optJSONObject(host)
+        if (site != null && site.has("adblock")) return site.optBoolean("adblock", true)
+        return !pausedHosts.contains(host)
+    }
+
+    private fun isHostJsEnabled(host: String?): Boolean {
+        if (host == null) return true
+        val site = getSiteSettingsMap().optJSONObject(host)
+        return site?.optBoolean("js", true) ?: true
+    }
+
+    private fun setSiteSetting(host: String, key: String, value: Boolean) {
+        try {
+            val root = getSiteSettingsMap()
+            val site = root.optJSONObject(host) ?: JSONObject()
+            site.put(key, value)
+            root.put(host, site)
+            prefs.edit().putString("site_settings", root.toString()).apply()
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun applySiteSettingsForUrl(tab: Tab, url: String) {
+        val host = hostOf(url)
+        tab.web.settings.javaScriptEnabled = isHostJsEnabled(host)
+    }
+
+    private fun showSiteSettingsDialog() {
+        val t = currentOrNull() ?: return
+        val host = hostOf(t.url)
+        if (host == null) {
+            toast("Open a website first")
+            return
+        }
+        val origin = Uri.parse(t.url).let { (it.scheme ?: "https") + "://" + host }
+        val (d, box) = newSheet(ViewGroup.LayoutParams.WRAP_CONTENT)
+        sheetHandle(box)
+        sheetTitle(box, host)
+
+        fun toggleRow(title: String, state: () -> Boolean, label: (Boolean) -> String, onToggle: () -> Unit) {
+            val chip = stateChip(label(state()), state())
+            val row = cardRow(title, null, chip, false) {
+                onToggle()
+                val on = state()
+                chip.text = label(on)
+                chip.background = surfaceDrawable(
+                    if (on) ROSE else VIOLET_TINT,
+                    999f,
+                    if (on) ROSE else VIOLET_GLOW,
+                    1
+                )
+            }
+            box.addView(row, rowLp())
+        }
+
+        toggleRow("Ad & tracker blocking", { isHostAdBlockEnabled(host) }, { if (it) "ON" else "OFF" }) {
+            val next = !isHostAdBlockEnabled(host)
+            setSiteSetting(host, "adblock", next)
+            val set = pausedHosts.toMutableSet()
+            if (next) set.remove(host) else set.add(host)
+            prefs.edit().putStringSet("adblock_paused", set).apply()
+            pausedHosts = set
+            reloadCurrent()
+        }
+
+        toggleRow("JavaScript", { isHostJsEnabled(host) }, { if (it) "ALLOWED" else "BLOCKED" }) {
+            val next = !isHostJsEnabled(host)
+            setSiteSetting(host, "js", next)
+            t.web.settings.javaScriptEnabled = next
+            reloadCurrent()
+        }
+
+        val permTypes = listOf("location" to "Location", "camera" to "Camera", "microphone" to "Microphone")
+        val states = listOf("ask", "allow", "block")
+        for ((type, label) in permTypes) {
+            fun cur() = getSitePermission(origin, type)
+            val chip = stateChip(cur().uppercase(), cur() == "allow")
+            val row = cardRow(label, "Tap to cycle Ask / Allow / Block", chip, false) {
+                val next = states[(states.indexOf(cur()) + 1) % states.size]
+                setSitePermission(origin, type, next)
+                if (type == "location") {
+                    if (next == "allow") GeolocationPermissions.getInstance().allow(origin)
+                    else GeolocationPermissions.getInstance().clear(origin)
                 }
-                d.dismiss()
-            }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        }
-        val actionsLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        actionsLp.topMargin = dp(8)
-        box.addView(actions, actionsLp)
-        if (driveAccount() != null) {
-            val signOut = TextView(this)
-            signOut.text = "Sign out"
-            signOut.textSize = 13f
-            signOut.setTextColor(ROSE)
-            signOut.gravity = Gravity.CENTER
-            signOut.setPadding(0, dp(14), 0, dp(2))
-            signOut.setOnClickListener {
-                startDriveSignOut()
-                d.dismiss()
+                chip.text = next.uppercase()
+                chip.background = surfaceDrawable(
+                    if (next == "allow") ROSE else VIOLET_TINT,
+                    999f,
+                    if (next == "allow") ROSE else VIOLET_GLOW,
+                    1
+                )
             }
-            box.addView(signOut, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            box.addView(row, rowLp())
         }
+
+        val clrLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46))
+        clrLp.topMargin = dp(4)
+        box.addView(pillButton("Clear site cookies & data", false) {
+            d.dismiss()
+            val cm = CookieManager.getInstance()
+            val cookies = cm.getCookie(origin)
+            if (cookies != null) {
+                for (pair in cookies.split(";")) {
+                    val name = pair.substringBefore("=").trim()
+                    if (name.isNotEmpty()) cm.setCookie(origin, "$name=; Max-Age=0")
+                }
+                cm.flush()
+            }
+            WebStorage.getInstance().deleteOrigin(origin)
+            GeolocationPermissions.getInstance().clear(origin)
+            setSitePermission(origin, "location", "ask")
+            setSitePermission(origin, "camera", "ask")
+            setSitePermission(origin, "microphone", "ask")
+            reloadCurrent()
+            toast("Cleared data for $host")
+        }, clrLp)
         d.show()
     }
-
-    private fun showJsonExportImport() {
-        val exportJson = JSONObject()
-            .put("bookmarks", JSONArray(loadList("bookmarks").map { JSONObject().put("t", it.first).put("u", it.second) }))
-            .put("reading_list", JSONArray(loadList("reading_list").map { JSONObject().put("t", it.first).put("u", it.second) }))
-            .toString(2)
-
-        dlg()
-            .setTitle("Bookmarks & Reading List JSON")
-            .setItems(arrayOf("Share / Copy JSON", "Import from JSON text")) { _, which ->
-                if (which == 0) {
-                    shareText(exportJson)
-                } else {
-                    val input = EditText(this)
-                    input.hint = "Paste exported JSON here"
-                    dlg()
-                        .setTitle("Import JSON")
-                        .setView(input)
-                        .setPositiveButton("Import") { _, _ ->
-                            try {
-                                val root = JSONObject(input.text.toString())
-                                root.optJSONArray("bookmarks")?.let { arr ->
-                                    val bm = mutableListOf<Pair<String, String>>()
-                                    for (i in 0 until arr.length()) {
-                                        val o = arr.optJSONObject(i) ?: continue
-                                        val u = o.optString("u", "")
-                                        if (u.isNotBlank()) bm.add(Pair(o.optString("t", ""), u))
-                                    }
-                                    saveList("bookmarks", bm)
-                                }
-                                root.optJSONArray("reading_list")?.let { arr ->
-                                    val rl = mutableListOf<Pair<String, String>>()
-                                    for (i in 0 until arr.length()) {
-                                        val o = arr.optJSONObject(i) ?: continue
-                                        val u = o.optString("u", "")
-                                        if (u.isNotBlank()) rl.add(Pair(o.optString("t", ""), u))
-                                    }
-                                    saveList("reading_list", rl)
-                                }
-                                reloadStartIfShown()
-                                toast("Imported JSON")
-                            } catch (_: Exception) {
-                                toast("Invalid JSON")
-                            }
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                }
-            }
-            .setNegativeButton("Close", null)
-            .show()
-    }
-
-    private fun launchQrScanner() {
-        val intent = Intent("com.google.zxing.client.android.SCAN")
-        intent.putExtra("SCAN_MODE", "QR_CODE_MODE")
-        try {
-            qrPicker.launch(intent)
-        } catch (_: Exception) {
-            val input = EditText(this)
-            input.setSingleLine()
-            input.hint = "https://example.com"
-            dlg()
-                .setTitle("Open scanned URL")
-                .setView(input)
-                .setPositiveButton("Open") { _, _ ->
-                    val raw = input.text.toString().trim()
-                    if (raw.isNotEmpty()) currentOrNull()?.let { navigate(it, if (isHttp(raw)) raw else "https://$raw") }
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-        }
-    }
-
-    private fun buildDiagnosticsReport(): String {
-        val wvPkg = WebViewCompat.getCurrentWebViewPackage(this)
-        val wvInfo = if (wvPkg != null) "${wvPkg.packageName} (${wvPkg.versionName})" else "Unavailable"
-        val crashHist = try {
-            val f = File(filesDir, "crash_history.log")
-            if (f.exists()) f.readText().take(8000) else "No recorded crashes"
-        } catch (_: Exception) {
-            "Unavailable"
-        }
-        return buildString {
-            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
-            appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("WebView: $wvInfo")
-            appendLine("Open tabs: ${tabs.size} (Private: ${tabs.count { it.priv }})")
-            appendLine("AdBlock global: $adBlockOn")
-            appendLine("--- Crash History ---")
-            append(crashHist)
-        }
-    }
-
-    private fun showDiagnostics() {
-        val report = buildDiagnosticsReport()
-        dlg()
-            .setTitle("Diagnostics")
-            .setMessage(report)
-            .setPositiveButton("Share") { _, _ -> shareText(report) }
-            .setNeutralButton("Clear crash log") { _, _ ->
-                File(filesDir, "crash_history.log").delete()
-                toast("Crash history cleared")
-            }
-            .setNegativeButton("Close", null)
-            .show()
-    }
-
 }
