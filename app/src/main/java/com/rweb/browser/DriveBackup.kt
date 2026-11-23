@@ -172,17 +172,19 @@ object DriveBackup {
     }
 
     /** Downloads the backup JSON, or null if there isn't one yet or the request failed. */
-    suspend fun downloadBackup(token: String): String? = try {
-        val id = findBackupFileId(token) ?: return null
-        val req = Request.Builder()
-            .url("$FILES_URL/$id?alt=media")
-            .header("Authorization", authHeader(token))
-            .get()
-            .build()
-        http.newCall(req).execute().use { resp ->
-            if (resp.isSuccessful) resp.body?.string() else null
+    suspend fun downloadBackup(token: String): String? {
+        return try {
+            val id = findBackupFileId(token) ?: return null
+            val req = Request.Builder()
+                .url("$FILES_URL/$id?alt=media")
+                .header("Authorization", authHeader(token))
+                .get()
+                .build()
+            http.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) resp.body?.string() else null
+            }
+        } catch (_: Exception) {
+            null
         }
-    } catch (_: Exception) {
-        null
     }
 }
