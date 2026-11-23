@@ -379,7 +379,8 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>"""
+        // Stylized "d" emblem for diddu in Obsidian & Electric Violet
+        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="var(--acc)" stroke-width="1.8" stroke-opacity="0.45"/><path d="M14.75 6.5v11M14.75 13.75a3.75 3.75 0 1 1 0-4.5" stroke="var(--acc)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.5" cy="7.25" r="1.25" fill="var(--acc)"/></svg>"""
 
         // Obsidian & Electric Violet start page theme
         const val START_CSS = """
@@ -4083,7 +4084,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
         badge.setTypeface(badge.typeface, Typeface.BOLD)
         badge.setTextColor(if (t.priv || selected) ROSE else INK)
         badge.background = surfaceDrawable(BG, 999f, if (selected) ROSE else HAIRLINE, 1)
-        badge.text = if (t.priv) "\uD83D\uDD76" else (t.title.trim().take(1).uppercase().ifEmpty { "N" })
+        badge.text = if (t.priv) "\uD83D\uDD76" else (t.title.trim().take(1).uppercase().ifEmpty { "d" })
         row.addView(badge, LinearLayout.LayoutParams(dp(40), dp(40)))
 
         val col = LinearLayout(this)
