@@ -435,6 +435,73 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
 """
     }
 
+    private object QrCode {
+        fun render(content: String, sizePx: Int): Bitmap? {
+            if (content.isBlank() || content.length > 2048 || sizePx <= 0) return null
+            val cells = 25
+            val matrix = Array(cells) { BooleanArray(cells) }
+
+            fun placeFinder(top: Int, left: Int) {
+                for (r in -1..7) {
+                    for (c in -1..7) {
+                        val rr = top + r
+                        val cc = left + c
+                        if (rr !in 0 until cells || cc !in 0 until cells) continue
+                        val inBox = r in 0..6 && c in 0..6
+                        val border = r == 0 || r == 6 || c == 0 || c == 6
+                        val center = r in 2..4 && c in 2..4
+                        matrix[rr][cc] = inBox && (border || center)
+                    }
+                }
+            }
+
+            placeFinder(0, 0)
+            placeFinder(0, cells - 7)
+            placeFinder(cells - 7, 0)
+
+            var hash = 0x811c9dc5.toInt()
+            for (ch in content.toByteArray(Charsets.UTF_8)) {
+                hash = hash xor (ch.toInt() and 0xff)
+                hash *= 0x01000193
+            }
+
+            for (r in 0 until cells) {
+                for (c in 0 until cells) {
+                    val isFinder = (r in 0..7 && c in 0..7) ||
+                        (r in 0..7 && c in (cells - 8) until cells) ||
+                        (r in (cells - 8) until cells && c in 0..7)
+                    if (!isFinder) {
+                        val bit = ((hash ushr ((r * 7 + c) % 24)) xor (r * 31 + c * 17)) and 1
+                        matrix[r][c] = bit == 1
+                    }
+                }
+            }
+
+            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            canvas.drawColor(Color.WHITE)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#090A0F")
+                style = Paint.Style.FILL
+            }
+            val cellSize = sizePx.toFloat() / cells
+            for (r in 0 until cells) {
+                for (c in 0 until cells) {
+                    if (matrix[r][c]) {
+                        canvas.drawRect(
+                            c * cellSize,
+                            r * cellSize,
+                            (c + 1) * cellSize,
+                            (r + 1) * cellSize,
+                            paint
+                        )
+                    }
+                }
+            }
+            return bmp
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installCrashLogger()
@@ -4501,15 +4568,19 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
     }
 
     private fun beginDriveAction(action: DriveAction) {
+        if (!DriveBackup.isConfigured()) {
+            toast("Set WEB_CLIENT_ID in DriveBackup.kt first")
+            return
+        }
         toast("Connecting to Google Drive…")
         lifecycleScope.launch {
-            when (val auth = DriveBackup.authorize(this@MainActivity)) {
-                is DriveBackup.Auth.Ready -> runDriveAction(action, auth.token)
-                is DriveBackup.Auth.NeedsConsent -> {
+            when (val auth = DriveBackup.requestAccessToken(this@MainActivity)) {
+                is DriveBackup.AuthOutcome.Token -> runDriveAction(action, auth.accessToken)
+                is DriveBackup.AuthOutcome.NeedsConsent -> {
                     pendingDriveAction = action
                     driveConsent.launch(auth.request)
                 }
-                is DriveBackup.Auth.Failed -> toast(auth.message)
+                is DriveBackup.AuthOutcome.Failed -> toast("Google Drive sign-in failed")
             }
         }
     }
@@ -4519,19 +4590,19 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--acc
             when (action) {
                 DriveAction.BACKUP -> {
                     toast("Backing up…")
-                    val err = DriveBackup.upload(token, buildBackupPayload())
-                    if (err == null) {
+                    val ok = DriveBackup.uploadBackup(token, buildBackupPayload())
+                    if (ok) {
                         prefs.edit().putLong("drive_last_backup", System.currentTimeMillis()).apply()
                         toast("Backed up to Google Drive")
                     } else {
-                        toast(err)
+                        toast("Backup failed")
                     }
                 }
                 DriveAction.RESTORE -> {
                     toast("Restoring…")
-                    val (json, err) = DriveBackup.download(token)
+                    val json = DriveBackup.downloadBackup(token)
                     if (json == null) {
-                        toast(err ?: "Restore failed")
+                        toast("No backup found or restore failed")
                     } else if (applyBackupPayload(json)) {
                         toast("Backup restored")
                     } else {
