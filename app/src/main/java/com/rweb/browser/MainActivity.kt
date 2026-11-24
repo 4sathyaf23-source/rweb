@@ -169,6 +169,9 @@ class MainActivity : ComponentActivity() {
     private var pendingGeoOrigin: String? = null
     private var pendingGeoCb: GeolocationPermissions.Callback? = null
 
+    private val suggestGeneration = AtomicInteger(0)
+    private var liveSuggestContainer: LinearLayout? = null
+
     // Cards built per section, and how many are visible under "All". The rest only appear when a sub-category
     // matches them, so a category has plenty to show without making the start page endless.
     private val NEWS_RENDER = 90
@@ -381,8 +384,8 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        // Stylized "d" emblem for diddu in Obsidian, Royal Blue & Sky Blue
-        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="var(--sky)" stroke-width="1.8" stroke-opacity="0.45"/><path d="M14.75 6.5v11M14.75 13.75a3.75 3.75 0 1 1 0-4.5" stroke="var(--sky)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17.5" cy="7.25" r="1.25" fill="var(--royal)"/></svg>"""
+        // All-blue lowercase "d" browser mark with inner cursor arrow and sweeping orbit arc
+        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><defs><linearGradient id="dBody" x1="4" y1="2.5" x2="20" y2="21.5" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="55%" stop-color="#0284C7"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient></defs><path d="M13.5 3.5h3.2v17h-3.2v-2.1a5.6 5.6 0 1 1 0-12.8V3.5zm0 5.4a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4z" fill="url(#dBody)"/><polygon points="11.6,10.2 15.2,12.1 11.6,14 12.6,12.1" fill="#38BDF8"/><path d="M19.6 7.5a9.4 9.4 0 0 1-13.8 11.7" stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round"/></svg>"""
 
         // Obsidian & Graphite start page with Deeper Royal Blue (#2563EB) solid buttons and Brighter Sky Blue (#38BDF8) highlights/focus rings
         const val START_CSS = """
@@ -3533,14 +3536,96 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         return row
     }
 
+    private fun autocompleteUrl(query: String): String {
+        val encoded = Uri.encode(query)
+        val base = searchBase()
+        return when {
+            base.startsWith("https://duckduckgo.com") ->
+                "https://duckduckgo.com/ac/?q=$encoded&type=list"
+            base.startsWith("https://www.bing.com") ->
+                "https://api.bing.com/osjson.aspx?query=$encoded"
+            else ->
+                "https://suggestqueries.google.com/complete/search?client=firefox&q=$encoded"
+        }
+    }
+
+    private fun parseSuggestions(rawJson: String): List<String> {
+        return try {
+            val arr = JSONArray(rawJson)
+            val list = arr.optJSONArray(1) ?: return emptyList()
+            val out = ArrayList<String>(list.length())
+            for (i in 0 until list.length()) {
+                val s = list.optString(i, "").trim()
+                if (s.isNotEmpty() && s !in out) {
+                    out.add(s)
+                    if (out.size >= 6) break
+                }
+            }
+            out
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun fetchLiveSuggestions(query: String, gen: Int, isPrivate: Boolean) {
+        if (isPrivate) return
+        runIo {
+            val items = try {
+                val url = URL(autocompleteUrl(query))
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 2500
+                    readTimeout = 2500
+                    setRequestProperty("User-Agent", mobileUa)
+                }
+                try {
+                    if (conn.responseCode in 200..299) {
+                        val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                        parseSuggestions(body)
+                    } else {
+                        emptyList()
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (gen != suggestGeneration.get()) return@runOnUiThread
+                val currentText = address.text?.toString()?.trim() ?: ""
+                if (currentText != query || !address.hasFocus() || isHttp(currentText)) return@runOnUiThread
+                renderLiveSuggestions(items)
+            }
+        }
+    }
+
+    private fun renderLiveSuggestions(items: List<String>) {
+        val box = liveSuggestContainer ?: return
+        box.removeAllViews()
+        for (suggestion in items) {
+            box.addView(
+                suggestRow(suggestion, searchBaseName()) {
+                    address.setText(suggestion)
+                    searchFor(suggestion)
+                }
+            )
+        }
+        box.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+    }
+
     private fun refreshSuggestions(text: String) {
         if (!::suggestBox.isInitialized) return
+        val gen = suggestGeneration.incrementAndGet()
         val q = text.trim()
         if (q.isEmpty() || isHttp(q)) {
             hideSuggestions()
             return
         }
         suggestBox.removeAllViews()
+        liveSuggestContainer = null
+
         val tld = defaultTld()
         val bare = q.removePrefix("www.")
         if (Regex("^[A-Za-z0-9-]+$").matches(bare)) {
@@ -3554,6 +3639,14 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             suggestBox.addView(suggestRow("Go to " + q, "Website") { openAddress(q) })
         }
         suggestBox.addView(suggestRow("Search the web for “" + q + "”", searchBaseName()) { searchFor(q) })
+
+        val liveBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        liveSuggestContainer = liveBox
+        suggestBox.addView(liveBox)
+
         suggestBox.addView(searchTypeRow(q))
         val isPrivate = currentOrNull()?.priv == true
         if (!isPrivate) {
@@ -3563,6 +3656,10 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             }
         }
         suggestBox.visibility = View.VISIBLE
+
+        if (!isPrivate && q.length >= 2) {
+            fetchLiveSuggestions(q, gen, isPrivate = false)
+        }
     }
 
     private fun openVrViewer() {
