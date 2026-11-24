@@ -56,6 +56,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.URLUtil
@@ -384,8 +385,8 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        // All-blue lowercase "d" browser mark with inner cursor arrow and sweeping orbit arc
-        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><defs><linearGradient id="dBody" x1="4" y1="2.5" x2="20" y2="21.5" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="55%" stop-color="#0284C7"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient></defs><path d="M13.5 3.5h3.2v17h-3.2v-2.1a5.6 5.6 0 1 1 0-12.8V3.5zm0 5.4a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4z" fill="url(#dBody)"/><polygon points="11.6,10.2 15.2,12.1 11.6,14 12.6,12.1" fill="#38BDF8"/><path d="M19.6 7.5a9.4 9.4 0 0 1-13.8 11.7" stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round"/></svg>"""
+        // Crisp all-blue compass/d browser badge: deep sky-to-royal gradient circle with a bold compass-arrow "d"
+        const val LOGO_SVG = """<svg viewBox="0 0 32 32" fill="none"><defs><linearGradient id="dBadge" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="55%" stop-color="#2563EB"/><stop offset="100%" stop-color="#1E40AF"/></linearGradient></defs><circle cx="16" cy="16" r="14" fill="url(#dBadge)"/><path d="M18.2 7.5h3.1v17h-3.1v-2.1a5.8 5.8 0 1 1 0-12.8V7.5zm0 5.6a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6z" fill="#FFFFFF"/><polygon points="10.4,13.6 15.6,16 10.4,18.4 11.7,16" fill="#BAE6FD"/></svg>"""
 
         // Obsidian & Graphite start page with Deeper Royal Blue (#2563EB) solid buttons and Brighter Sky Blue (#38BDF8) highlights/focus rings
         const val START_CSS = """
@@ -394,12 +395,16 @@ html.dark{--bg:#090A0F;--fg:#F3F4F6;--mute:#9CA3AF;--card:#131622;--fld:#131622;
 *{box-sizing:border-box}
 body{margin:0 auto;padding:max(20px,4vh) 0 44px;max-width:560px;background:var(--bg);color:var(--fg);font-family:sans-serif}
 .brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;white-space:nowrap}
-.logo{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:var(--fld);border:1px solid var(--line);box-shadow:var(--sh);flex:0 0 auto}
-.logo svg{width:26px;height:26px}
+.logo{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:var(--fld);border:1px solid var(--line);box-shadow:var(--sh);flex:0 0 auto;overflow:hidden}
+.logo svg{width:34px;height:34px}
 h1{color:var(--sky);font-size:32px;margin:0;line-height:1;letter-spacing:-.02em}
 .sf{margin:0 16px;position:relative}
 input{width:100%;padding:15px 86px 15px 20px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:16px;box-shadow:var(--sh);outline:none;transition:border-color .18s ease,box-shadow .18s ease}
 input:focus{border-color:var(--sky);box-shadow:0 0 0 3px var(--sky-tint)}
+.sugg-box{display:none;margin:8px 16px 0;background:var(--card);border:1px solid var(--sky);border-radius:18px;box-shadow:var(--sh);overflow:hidden}
+.sugg-item{display:block;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--chip-bdr);color:var(--fg);padding:12px 16px;font-size:14px;cursor:pointer}
+.sugg-item:last-child{border-bottom:0}
+.sugg-item:active{background:var(--sky-tint)}
 .sic{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px}
 .sic-cam{right:46px}
 .sic-mic{right:8px}
@@ -444,6 +449,52 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
 .cchip{flex:0 0 auto;padding:6px 14px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:12px;font-weight:500;box-shadow:var(--sh);white-space:nowrap}
 .cchip.on{background:var(--royal);border-color:var(--sky);color:var(--acc-ink);font-weight:600;box-shadow:0 4px 14px rgba(37,99,235,.38)}
 """
+    }
+
+    private inner class PageBridge(private val tab: Tab) {
+        @JavascriptInterface
+        fun requestSuggestions(query: String) {
+            // The bridge is attached to every tab, so only the built-in start page (empty display URL) may use it.
+            // tab.url is set in onPageStarted, before any script of the new page can run.
+            if (tab.priv || tab.url.isNotEmpty()) return
+            val clean = query.trim()
+            if (clean.length < 2) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    tab.web.evaluateJavascript("if(window._renderSugg)window._renderSugg([]);", null)
+                }
+                return
+            }
+            runIo {
+                val items = try {
+                    val url = URL(autocompleteUrl(clean))
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 2500
+                        readTimeout = 2500
+                        setRequestProperty("User-Agent", mobileUa)
+                    }
+                    try {
+                        if (conn.responseCode in 200..299) {
+                            val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                            parseSuggestions(body)
+                        } else {
+                            emptyList()
+                        }
+                    } finally {
+                        conn.disconnect()
+                    }
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    tab.web.evaluateJavascript(
+                        "if(window._renderSugg)window._renderSugg(" + JSONArray(items).toString() + ");",
+                        null
+                    )
+                }
+            }
+        }
     }
 
     private object QrCode {
@@ -1522,6 +1573,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         s.safeBrowsingEnabled = true
         s.setSupportMultipleWindows(true)
         applyClientIdentity(s, tab.desktop, tab.desktop)
+        web.addJavascriptInterface(PageBridge(tab), "DidduBridge")
 
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -1952,9 +2004,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             .show()
     }
 
-    private fun allEngines(): List<Pair<String, String>> {
-        return baseEngines
-    }
+    private fun allEngines(): List<Pair<String, String>> = baseEngines
 
     private fun engineIconUrl(): String {
         val host = Uri.parse(searchBase()).host ?: return ""
@@ -1991,6 +2041,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             "autocomplete=\"off\" autocapitalize=\"off\" enterkeyhint=\"search\">" +
             "<span class=\"sic sic-cam\" role=\"button\" aria-label=\"Search by image\" onclick=\"location.href='rweb://photo'\">\uD83D\uDCF7</span>" +
             "<span class=\"sic sic-mic\" role=\"button\" aria-label=\"Voice search\" onclick=\"location.href='rweb://voice'\">\uD83C\uDFA4</span></form>" +
+            "<div id=\"sugg\" class=\"sugg-box\"></div>" +
             "<div class=\"hrow chips\"><span class=\"chip on\" id=\"c-web\" onclick=\"pick('web')\">Web</span>" +
             "<span class=\"chip\" id=\"c-img\" onclick=\"pick('img')\">Images</span>" +
             "<span class=\"chip\" id=\"c-vid\" onclick=\"pick('vid')\">Videos</span>" +
@@ -3422,10 +3473,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             "};var cur='web';function pick(k){var v=document.getElementById('q').value.trim();if(v){cur=k;go();return;}cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
             "document.getElementById('q').placeholder=(k==='web')?'Search the web or type a website':(k==='img'?'Search images':'Search videos');}" +
             "function isDomain(v){return /^(https?:\\/\\/\\S+|(localhost|[a-z0-9-]+(\\.[a-z0-9-]+)+)(:\\d+)?(\\/\\S*)?)$/i.test(v)&&!/\\.\\./.test(v);}" +
-            "function go(){var v=document.getElementById('q').value.trim();if(!v){return false;}" +
-            "if(cur==='web'&&isDomain(v)){location.href=/^https?:\\/\\//i.test(v)?v:'https://'+v;return false;}" +
-            "location.href='rweb://s?k='+cur+'&q='+encodeURIComponent(v);return false;}" +
-            "var _secReady=false;window.addEventListener('DOMContentLoaded',function(){setTimeout(function(){_secReady=true;},80);});function saveSec(d){if(!_secReady)return;var k=d.getAttribute('data-sec');if(k){location.href='rweb://toggle?k='+encodeURIComponent(k)+'&v='+(d.open?'1':'0');}}function filterCategory(s,c,b){if(typeof c==='undefined'){return;}var r=document.getElementById(s==='vids'?'vids':'news');if(!r){return;}" +
+            "function goWithQuery(v){if(!v){return false;}if(cur==='web'&&isDomain(v)){location.href=/^https?:\\/\\//i.test(v)?v:'https://'+v;return false;}location.href='rweb://s?k='+cur+'&q='+encodeURIComponent(v);return false;}" +
+            "function go(){return goWithQuery(document.getElementById('q').value.trim());}" +
+            "window._renderSugg=function(list){var box=document.getElementById('sugg');if(!box)return;if(!Array.isArray(list)||!list.length){box.style.display='none';box.innerHTML='';return;}box.innerHTML='';list.forEach(function(item){var btn=document.createElement('button');btn.type='button';btn.className='sugg-item';btn.textContent=item;btn.onclick=function(){document.getElementById('q').value=item;goWithQuery(item);};box.appendChild(btn);});box.style.display='block';};" +
+            "window.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('q');if(inp){var t=null;inp.addEventListener('input',function(){clearTimeout(t);var val=inp.value;t=setTimeout(function(){if(window.DidduBridge&&DidduBridge.requestSuggestions){DidduBridge.requestSuggestions(val);} },160);});}setTimeout(function(){_secReady=true;},80);});" +
+            "var _secReady=false;function saveSec(d){if(!_secReady)return;var k=d.getAttribute('data-sec');if(k){location.href='rweb://toggle?k='+encodeURIComponent(k)+'&v='+(d.open?'1':'0');}}function filterCategory(s,c,b){if(typeof c==='undefined'){return;}var r=document.getElementById(s==='vids'?'vids':'news');if(!r){return;}" +
             "r.querySelectorAll(s==='vids'?'.vc':'.nw').forEach(function(e){var late=e.getAttribute('data-late')==='1';" +
             "var show=(c==='All')?!late:((e.getAttribute('data-cat')||'').split(' ').indexOf(c)>=0);e.style.display=show?'':'none';});" +
             "r.querySelectorAll('.cchip').forEach(function(x){x.classList.remove('on');});if(b){b.classList.add('on');}}</script>"
