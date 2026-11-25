@@ -172,6 +172,7 @@ class MainActivity : ComponentActivity() {
 
     private val suggestGeneration = AtomicInteger(0)
     private var liveSuggestContainer: LinearLayout? = null
+    private var shownRecents: Set<String> = emptySet()
     private var suggestDebounceRunnable: Runnable? = null
 
     // Cards built per section, and how many are visible under "All". The rest only appear when a sub-category
@@ -461,12 +462,21 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             // tab.url is set in onPageStarted, before any script of the new page can run.
             if (tab.priv || tab.url.isNotEmpty()) return
             val clean = query.trim()
+            val recents = matchingRecents(clean)
+            val recentsJs = JSONArray(recents).toString()
             if (clean.length < 2) {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
-                    tab.web.evaluateJavascript("if(window._renderSugg)window._renderSugg([]);", null)
+                    tab.web.evaluateJavascript("if(window._renderSugg)window._renderSugg([]," + recentsJs + ");", null)
                 }
                 return
+            }
+            // Earlier searches show at once; the live suggestions join them when they arrive.
+            if (recents.isNotEmpty()) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    tab.web.evaluateJavascript("if(window._renderSugg)window._renderSugg([]," + recentsJs + ");", null)
+                }
             }
             runIo {
                 val items = try {
@@ -492,7 +502,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     tab.web.evaluateJavascript(
-                        "if(window._renderSugg)window._renderSugg(" + JSONArray(items).toString() + ");",
+                        "if(window._renderSugg)window._renderSugg(" + JSONArray(items).toString() + "," + recentsJs + ");",
                         null
                     )
                 }
@@ -1079,18 +1089,13 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         root.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)))
         suggestBox = LinearLayout(this)
         suggestBox.orientation = LinearLayout.VERTICAL
-        val sbBg = GradientDrawable()
-        sbBg.setColor(SHEET)
-        sbBg.setStroke(dp(1), SKY_GLOW)
-        val sr = dp(20).toFloat()
-        sbBg.cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, sr, sr, sr, sr)
-        suggestBox.background = sbBg
-        suggestBox.elevation = dp(12).toFloat()
-        suggestBox.setPadding(dp(8), dp(4), dp(8), dp(8))
+        styleSuggestBox()
         suggestBox.visibility = View.GONE
         val contentWrap = FrameLayout(this)
         contentWrap.addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        contentWrap.addView(suggestBox, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        val sbLp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP)
+        sbLp.setMargins(dp(16), dp(8), dp(16), 0)
+        contentWrap.addView(suggestBox, sbLp)
         root.addView(contentWrap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         attachTabSwipeGestures(topBar)
         attachTabSwipeGestures(islandWrap)
@@ -1205,8 +1210,10 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         val v = raw.trim()
         if (v.isEmpty() || v.contains(' ')) return null
         if (v.startsWith("http://", true) || v.startsWith("https://", true)) return v
-        if (Regex("""^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+)(:\d+)?(/\S*)?$""", RegexOption.IGNORE_CASE).matches(v) && !v.contains("..")) {
-            return "https://" + v
+        if (Regex("""^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+)(:\d+)?([/?#]\S*)?$""", RegexOption.IGNORE_CASE).matches(v) && !v.contains("..")) {
+            // Local and IP addresses rarely have HTTPS, so they open over http; every other domain opens over https.
+            val local = Regex("""^(localhost|\d{1,3}(\.\d{1,3}){3})([:/?#]|$)""", RegexOption.IGNORE_CASE).containsMatchIn(v)
+            return (if (local) "http://" else "https://") + v
         }
         return null
     }
@@ -3465,6 +3472,13 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
 
     // ---- recent searches (never recorded in private tabs) ----
 
+    /** Earlier searches that contain what the person is typing now (not the identical text), newest first. */
+    private fun matchingRecents(typed: String, limit: Int = 3): List<String> {
+        val q = typed.trim()
+        if (q.isEmpty()) return emptyList()
+        return recentSearches().filter { it.contains(q, true) && !it.equals(q, true) }.take(limit)
+    }
+
     private fun recentSearches(): List<String> = try {
         val a = JSONArray(prefs.getString("recent_searches", "[]"))
         (0 until a.length()).map { a.getString(it) }
@@ -3485,12 +3499,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
     private fun runSearch(tab: Tab, kind: String, q: String) {
         val text = q.trim()
         if (text.isEmpty()) return
-        if (kind == "web") {
-            val direct = directDomainUrl(text)
-            if (direct != null) {
-                navigate(tab, direct)
-                return
-            }
+        // A complete address (.com, .in, any domain) always opens that website, whatever search type is selected.
+        val direct = directDomainUrl(text)
+        if (direct != null) {
+            navigate(tab, direct)
+            return
         }
         val b = typedSearchBases()
         val base = when (kind) {
@@ -3518,10 +3531,10 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         return "<script>var B={web:" + JSONObject.quote(b.first) + ",img:" + JSONObject.quote(b.second) + ",vid:" + JSONObject.quote(b.third) +
             "};var cur='web';function pick(k){var v=document.getElementById('q').value.trim();if(v){cur=k;go();return;}cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
             "document.getElementById('q').placeholder=(k==='web')?'Search the web or type an address':(k==='img'?'Search images':'Search videos');}" +
-            "function isDomain(v){return /^(https?:\\/\\/\\S+|(localhost|[a-z0-9-]+(\\.[a-z0-9-]+)+)(:\\d+)?(\\/\\S*)?)$/i.test(v)&&!/\\.\\./.test(v);}" +
-            "function goWithQuery(v){if(!v){return false;}if(cur==='web'&&isDomain(v)){location.href=/^https?:\\/\\//i.test(v)?v:'https://'+v;return false;}location.href='rweb://s?k='+cur+'&q='+encodeURIComponent(v);return false;}" +
+            "function isDomain(v){return /^(https?:\\/\\/\\S+|(localhost|[a-z0-9-]+(\\.[a-z0-9-]+)+)(:\\d+)?([\\/?#]\\S*)?)$/i.test(v)&&!/\\.\\./.test(v)&&!/\\s/.test(v);}" +
+            "function goWithQuery(v){if(!v){return false;}if(isDomain(v)){var loc=/^(localhost|\\d{1,3}(\\.\\d{1,3}){3})([:\\/?#]|$)/i.test(v);location.href=/^https?:\\/\\//i.test(v)?v:(loc?'http://':'https://')+v;return false;}location.href='rweb://s?k='+cur+'&q='+encodeURIComponent(v);return false;}" +
             "function go(){return goWithQuery(document.getElementById('q').value.trim());}" +
-            "window._renderSugg=function(list){var box=document.getElementById('sugg');if(!box)return;if(!Array.isArray(list)||!list.length){box.style.display='none';box.innerHTML='';return;}box.innerHTML='';list.forEach(function(item){var btn=document.createElement('button');btn.type='button';btn.className='sugg-item';btn.textContent=item;btn.onclick=function(){document.getElementById('q').value=item;goWithQuery(item);};box.appendChild(btn);});box.style.display='block';};" +
+            "window._renderSugg=function(list,recents){var box=document.getElementById('sugg');if(!box)return;list=Array.isArray(list)?list:[];recents=Array.isArray(recents)?recents:[];var seen={},all=[];recents.forEach(function(r){seen[String(r).toLowerCase()]=1;all.push([r,true]);});list.forEach(function(x){var k=String(x).toLowerCase();if(!seen[k]){seen[k]=1;all.push([x,false]);}});if(!all.length){box.style.display='none';box.innerHTML='';return;}box.innerHTML='';all.forEach(function(it){var btn=document.createElement('button');btn.type='button';btn.className='sugg-item';btn.textContent=(it[1]?'\u21BA  ':'')+it[0];btn.onclick=function(){document.getElementById('q').value=it[0];goWithQuery(it[0]);};box.appendChild(btn);});box.style.display='block';};" +
             "window.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('q');if(inp){var t=null;inp.addEventListener('input',function(){clearTimeout(t);var val=inp.value;t=setTimeout(function(){if(window.DidduBridge&&DidduBridge.requestSuggestions){DidduBridge.requestSuggestions(val);} },160);});}setTimeout(function(){_secReady=true;},80);});" +
             "var _secReady=false;" +
             "function saveSec(d){if(!_secReady)return;var k=d.getAttribute('data-sec');if(k){location.href='rweb://toggle?k='+encodeURIComponent(k)+'&v='+(d.open?'1':'0');}}function filterCategory(s,c,b){if(typeof c==='undefined'){return;}var r=document.getElementById(s==='vids'?'vids':'news');if(!r){return;}" +
@@ -3572,29 +3585,50 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         toast("Choose or take a photo on the page")
     }
 
-    private fun suggestRow(title: String, sub: String?, onClick: () -> Unit): View {
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(12), dp(8), dp(12), dp(8))
-        col.background = ripple()
-        col.setOnClickListener { onClick() }
+    private fun suggestTextColor(): Int = if (isDark()) INK else Color.parseColor("#0F172A")
+
+    /** Same look as the start page's suggestion box: a rounded card with a sky-blue border and thin dividers. */
+    private fun styleSuggestBox() {
+        val dark = isDark()
+        val bg = GradientDrawable()
+        bg.setColor(if (dark) BAR else Color.WHITE)
+        bg.cornerRadius = dp(18).toFloat()
+        bg.setStroke(dp(1), SKY)
+        suggestBox.background = bg
+        suggestBox.clipToOutline = true
+        suggestBox.elevation = dp(12).toFloat()
+        suggestBox.setPadding(0, 0, 0, 0)
+        suggestBox.showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
+        suggestBox.dividerDrawable = suggestDivider()
+    }
+
+    private fun suggestDivider(): Drawable {
+        val d = GradientDrawable()
+        d.setColor(if (isDark()) HAIRLINE else Color.parseColor("#E2E8F0"))
+        d.setSize(0, dp(1))
+        return d
+    }
+
+    private fun updateSuggestVisibility() {
+        if (!::suggestBox.isInitialized) return
+        var any = false
+        for (i in 0 until suggestBox.childCount) {
+            if (suggestBox.getChildAt(i).visibility == View.VISIBLE) any = true
+        }
+        suggestBox.visibility = if (any) View.VISIBLE else View.GONE
+    }
+
+    private fun suggestRow(title: String, @Suppress("UNUSED_PARAMETER") sub: String?, onClick: () -> Unit): View {
         val t = TextView(this)
         t.text = title
-        t.textSize = 15f
-        t.setTextColor(INK)
+        t.textSize = 14f
+        t.setTextColor(suggestTextColor())
         t.maxLines = 1
         t.ellipsize = TextUtils.TruncateAt.END
-        col.addView(t)
-        if (sub != null) {
-            val st = TextView(this)
-            st.text = sub
-            st.textSize = 12f
-            st.setTextColor(MUTE)
-            st.maxLines = 1
-            st.ellipsize = TextUtils.TruncateAt.END
-            col.addView(st)
-        }
-        return col
+        t.setPadding(dp(16), dp(12), dp(16), dp(12))
+        t.background = ripple()
+        t.setOnClickListener { onClick() }
+        return t
     }
 
     private fun searchTypeRow(q: String): View {
@@ -3701,18 +3735,29 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         }
     }
 
+    /** A complete domain opens that website; anything else is searched. */
+    private fun openSearchOrAddress(text: String) {
+        val direct = directDomainUrl(text)
+        if (direct != null) {
+            openAddress(direct)
+        } else {
+            address.setText(text)
+            searchFor(text)
+        }
+    }
+
     private fun renderLiveSuggestions(items: List<String>) {
         val box = liveSuggestContainer ?: return
         box.removeAllViews()
-        for (suggestion in items) {
+        for (suggestion in items.filter { it.lowercase() !in shownRecents }) {
             box.addView(
                 suggestRow(suggestion, searchBaseName()) {
-                    address.setText(suggestion)
-                    searchFor(suggestion)
+                    openSearchOrAddress(suggestion)
                 }
             )
         }
-        box.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+        box.visibility = if (box.childCount == 0) View.GONE else View.VISIBLE
+        updateSuggestVisibility()
     }
 
     private fun refreshSuggestions(text: String) {
@@ -3725,6 +3770,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         }
         suggestBox.removeAllViews()
         liveSuggestContainer = null
+        styleSuggestBox()
 
         val tld = defaultTld()
         val bare = q.removePrefix("www.")
@@ -3738,24 +3784,35 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         } else if (!q.contains(' ') && q.contains('.')) {
             suggestBox.addView(suggestRow("Go to " + q, "Website") { openAddress(q) })
         }
-        suggestBox.addView(suggestRow("Search the web for “" + q + "”", searchBaseName()) { searchFor(q) })
+        val isPrivate = currentOrNull()?.priv == true
+        // Private tabs get no live suggestions, so they keep a plain search row.
+        if (isPrivate) suggestBox.addView(suggestRow("Search the web for “" + q + "”", null) { searchFor(q) })
+
+        shownRecents = emptySet()
+        if (!isPrivate) {
+            val recents = matchingRecents(q)
+            shownRecents = recents.map { it.lowercase() }.toSet()
+            for (r in recents) {
+                suggestBox.addView(suggestRow("\u21BA  " + r, null) { openSearchOrAddress(r) })
+            }
+        }
 
         val liveBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
+            showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
+            dividerDrawable = suggestDivider()
         }
         liveSuggestContainer = liveBox
         suggestBox.addView(liveBox)
 
-        suggestBox.addView(searchTypeRow(q))
-        val isPrivate = currentOrNull()?.priv == true
         if (!isPrivate) {
             val hits = loadList("history").filter { it.first.contains(q, true) || it.second.contains(q, true) }.take(3)
             for (h in hits) {
                 suggestBox.addView(suggestRow(if (h.first.isBlank()) h.second else h.first, h.second) { openAddress(h.second) })
             }
         }
-        suggestBox.visibility = View.VISIBLE
+        updateSuggestVisibility()
 
         if (!isPrivate && q.length >= 2) {
             fetchLiveSuggestions(q, gen, isPrivate = false)
@@ -3769,13 +3826,25 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         t.web.loadDataWithBaseURL("https://rweb.local/", VrViewer.HTML, "text/html", "utf-8", null)
     }
 
-    /** The address bar stays visible everywhere except full-screen app mode, so the layout never jumps. */
+    /**
+     * The address bar is hidden on the start page, where the big search box (with its own suggestions) is the one
+     * search field. It appears as soon as a website, history or other page is open, and is hidden in full-screen app mode.
+     */
     private fun updateTopBar() {
         val t = currentOrNull()
-        topBar.visibility = if (barsHidden) View.GONE else View.VISIBLE
-        if (barsHidden) hideSuggestions()
+        val onStart = t != null && t.url.isEmpty()
+        val showTop = !barsHidden && !onStart
+        topBar.visibility = if (showTop) View.VISIBLE else View.GONE
+        if (!showTop) hideSuggestions()
         if (::statusSpacer.isInitialized && ::navSpacer.isInitialized) {
-            statusSpacer.setBackgroundColor(if (t?.priv == true) PRIV else BAR)
+            statusSpacer.setBackgroundColor(
+                when {
+                    onStart && (t?.priv == true || isDark()) -> BG
+                    onStart -> Color.parseColor("#F8FAFC")
+                    t?.priv == true -> PRIV
+                    else -> BAR
+                }
+            )
             navSpacer.setBackgroundColor(BG)
         }
     }
