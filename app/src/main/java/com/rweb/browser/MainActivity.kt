@@ -56,7 +56,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
-import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.URLUtil
@@ -67,6 +66,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebStorage
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
@@ -172,6 +172,7 @@ class MainActivity : ComponentActivity() {
 
     private val suggestGeneration = AtomicInteger(0)
     private var liveSuggestContainer: LinearLayout? = null
+    private var suggestDebounceRunnable: Runnable? = null
 
     // Cards built per section, and how many are visible under "All". The rest only appear when a sub-category
     // matches them, so a category has plenty to show without making the start page endless.
@@ -385,8 +386,8 @@ class MainActivity : ComponentActivity() {
         const val VIDEO_SHAPE_JS = "(function(){var a=document.querySelectorAll('video');var p=null;for(var i=0;i<a.length;i++){if(!a[i].paused&&a[i].videoWidth){p=a[i];break}}if(!p&&a.length)p=a[0];return p&&p.videoWidth?p.videoWidth+'x'+p.videoHeight:''})()"
         const val AUDIO_JS = "(function(){var m=document.querySelectorAll('audio,video');for(var i=0;i<m.length;i++){var e=m[i];if(!e.paused&&!e.ended&&e.readyState>2&&!e.muted&&e.volume>0)return true}return false})()"
 
-        // Crisp all-blue compass/d browser badge: deep sky-to-royal gradient circle with a bold compass-arrow "d"
-        const val LOGO_SVG = """<svg viewBox="0 0 32 32" fill="none"><defs><linearGradient id="dBadge" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38BDF8"/><stop offset="55%" stop-color="#2563EB"/><stop offset="100%" stop-color="#1E40AF"/></linearGradient></defs><circle cx="16" cy="16" r="14" fill="url(#dBadge)"/><path d="M18.2 7.5h3.1v17h-3.1v-2.1a5.8 5.8 0 1 1 0-12.8V7.5zm0 5.6a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6z" fill="#FFFFFF"/><polygon points="10.4,13.6 15.6,16 10.4,18.4 11.7,16" fill="#BAE6FD"/></svg>"""
+        // Crisp high-contrast lowercase "d" badge in Royal Blue & Sky Blue
+        const val LOGO_SVG = """<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="var(--royal)" stroke="var(--sky)" stroke-width="1.4"/><path d="M15 5.2v13.6h-2.5v-1.5a4.6 4.6 0 1 1 0-10.6V5.2H15zm-2.5 4.3a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="#FFFFFF"/></svg>"""
 
         // Obsidian & Graphite start page with Deeper Royal Blue (#2563EB) solid buttons and Brighter Sky Blue (#38BDF8) highlights/focus rings
         const val START_CSS = """
@@ -405,20 +406,22 @@ input:focus{border-color:var(--sky);box-shadow:0 0 0 3px var(--sky-tint)}
 .sugg-item{display:block;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--chip-bdr);color:var(--fg);padding:12px 16px;font-size:14px;cursor:pointer}
 .sugg-item:last-child{border-bottom:0}
 .sugg-item:active{background:var(--sky-tint)}
-.sic{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.sic{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.sic svg{width:18px;height:18px;display:block;color:var(--mute)}
+.sic:active svg{color:var(--sky)}
 .sic-cam{right:46px}
 .sic-mic{right:8px}
-.sic-eng{left:10px;width:22px;height:22px}
+.sic-eng{left:12px;width:22px;height:22px}
 .sic-eng img{width:22px;height:22px;border-radius:999px}
 .hrow,.vrow{display:flex;gap:14px;overflow-x:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none}
 .hrow::-webkit-scrollbar,.vrow::-webkit-scrollbar,.cchips::-webkit-scrollbar{display:none}
-.chips{margin-top:12px;gap:10px;flex-wrap:nowrap}
-.chip{flex:0 0 auto;padding:8px 16px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:13px;font-weight:500;box-shadow:var(--sh);white-space:nowrap;scroll-snap-align:start}
+.mode-row{display:flex;gap:10px;margin:12px 16px 0}
+.chip{flex:1;text-align:center;padding:9px 12px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:13px;font-weight:500;box-shadow:var(--sh);white-space:nowrap;cursor:pointer}
 .chip.on{background:var(--royal);border-color:var(--sky);color:var(--acc-ink);font-weight:600;box-shadow:0 6px 18px rgba(37,99,235,.4)}
-.frow{display:flex;gap:10px;margin:14px 16px 0}
-.fpill{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 12px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh);text-decoration:none}
+.frow{display:flex;gap:10px;margin:12px 16px 0}
+.fpill{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border-radius:999px;border:1px solid var(--chip-bdr);background:var(--fld);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh);text-decoration:none}
 .fpill:active{border-color:var(--sky)}
-.fpill .em{font-size:16px}
+.fpill svg{width:17px;height:17px;flex:0 0 auto;color:var(--sky)}
 .sec{margin:18px 12px 0;padding:14px 0 6px;border-top:1px solid var(--line);border-radius:18px}
 .s1,.s2,.s3,.s4,.s5{background:transparent}
 .nh{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;padding:0 16px 10px}
@@ -469,8 +472,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
                 val items = try {
                     val url = URL(autocompleteUrl(clean))
                     val conn = (url.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 2500
-                        readTimeout = 2500
+                        connectTimeout = 1500
+                        readTimeout = 1500
                         setRequestProperty("User-Agent", mobileUa)
                     }
                     try {
@@ -792,6 +795,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
     }
 
     override fun onPause() {
+        suggestDebounceRunnable?.let { handler.removeCallbacks(it) }
         inBackground = true
         handler.removeCallbacks(mediaPoll)
         refreshHandler.removeCallbacks(feedRefreshRunnable)
@@ -840,6 +844,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
     }
 
     override fun onDestroy() {
+        suggestDebounceRunnable?.let { handler.removeCallbacks(it) }
         handler.removeCallbacks(mediaPoll)
         refreshHandler.removeCallbacks(feedRefreshRunnable)
         stopPlaybackService()
@@ -912,6 +917,17 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         if (strokeDp > 0) setStroke(dp(strokeDp), strokeColor)
     }
 
+    private fun extractSearchQuery(url: String): String? {
+        if (!isHttp(url)) return null
+        val uri = Uri.parse(url)
+        val host = uri.host?.lowercase() ?: return null
+        val path = uri.path ?: ""
+        val isSearchPage = (host.contains("google.") && path.startsWith("/search")) ||
+            (host.contains("bing.com") && path.startsWith("/search")) ||
+            (host.contains("duckduckgo.com") && uri.getQueryParameter("q") != null)
+        return if (isSearchPage) uri.getQueryParameter("q")?.takeIf { it.isNotBlank() } else null
+    }
+
     private fun buildUi() {
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
@@ -954,7 +970,16 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                if (address.hasFocus()) refreshSuggestions(s?.toString() ?: "")
+                if (!address.hasFocus()) return
+                val snapshot = s?.toString() ?: ""
+                suggestDebounceRunnable?.let { handler.removeCallbacks(it) }
+                val r = Runnable {
+                    if (!isFinishing && !isDestroyed && address.hasFocus()) {
+                        refreshSuggestions(snapshot)
+                    }
+                }
+                suggestDebounceRunnable = r
+                handler.postDelayed(r, 150)
             }
         })
         address.setOnFocusChangeListener { _, focused ->
@@ -963,7 +988,18 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             } else {
                 surfaceDrawable(BG, 24f, HAIRLINE, 1)
             }
-            if (focused) refreshSuggestions(address.text.toString()) else hideSuggestions()
+            if (focused) {
+                val queryFromUrl = extractSearchQuery(currentOrNull()?.url ?: "")
+                if (queryFromUrl != null && address.text.toString() == (currentOrNull()?.url ?: "")) {
+                    address.setText(queryFromUrl)
+                    address.selectAll()
+                }
+                refreshSuggestions(address.text.toString())
+            } else {
+                hideSuggestions()
+                suggestDebounceRunnable?.let { handler.removeCallbacks(it) }
+                address.setText(displayUrl(currentOrNull()?.url ?: ""))
+            }
         }
         address.setOnEditorActionListener { _, actionId, event ->
             val enter = event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
@@ -1686,6 +1722,11 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
                     val builtIn = tab.url.isEmpty() || tab.url == "rweb://history"
                     if (!builtIn || !req.isForMainFrame) return true
                     when (u.host) {
+                        "focus" -> {
+                            address.requestFocus()
+                            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                            imm.showSoftInput(address, InputMethodManager.SHOW_IMPLICIT)
+                        }
                         "voice" -> launchVoice()
                         "photo" -> openPhotoSearch()
                         "home" -> loadStart(tab.web)
@@ -2030,24 +2071,29 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
 
     private fun siteIcons(): Boolean = prefs.getBoolean("icons", true)
 
-    /** Top of every start page: logo and name on ONE line, the search box, then one scrolling row of search types. */
-    private fun homeHead(dark: Boolean, icons: Boolean = siteIcons()): String =
-        "<!doctype html><html" + (if (dark) " class=\"dark\"" else "") + "><head><meta charset=\"utf-8\">" +
+    private fun homeHead(dark: Boolean, icons: Boolean = siteIcons()): String {
+        val camSvg = """<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>"""
+        val micSvg = """<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>"""
+        val aiSvg = """<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg>"""
+        val shieldSvg = """<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>"""
+
+        return "<!doctype html><html" + (if (dark) " class=\"dark\"" else "") + "><head><meta charset=\"utf-8\">" +
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>" + START_CSS + "</style></head><body>" +
             "<div class=\"brand\"><span class=\"logo\">" + LOGO_SVG + "</span><h1>diddu</h1></div>" +
             "<form class=\"sf\" onsubmit=\"return go()\">" +
             (if (icons) "<span class=\"sic sic-eng\"><img referrerpolicy=\"no-referrer\" src=\"" + esc(engineIconUrl()) + "\" onerror=\"this.parentElement.style.display='none'\"></span>" else "") +
             "<input id=\"q\" name=\"q\" placeholder=\"Search the web or type an address\" style=\"padding-left:" + (if (icons) "48px" else "20px") + "\" " +
             "autocomplete=\"off\" autocapitalize=\"off\" enterkeyhint=\"search\">" +
-            "<span class=\"sic sic-cam\" role=\"button\" aria-label=\"Search by image\" onclick=\"location.href='rweb://photo'\">\uD83D\uDCF7</span>" +
-            "<span class=\"sic sic-mic\" role=\"button\" aria-label=\"Voice search\" onclick=\"location.href='rweb://voice'\">\uD83C\uDFA4</span></form>" +
+            "<span class=\"sic sic-cam\" role=\"button\" aria-label=\"Search by image\" onclick=\"location.href='rweb://photo'\">" + camSvg + "</span>" +
+            "<span class=\"sic sic-mic\" role=\"button\" aria-label=\"Voice search\" onclick=\"location.href='rweb://voice'\">" + micSvg + "</span></form>" +
             "<div id=\"sugg\" class=\"sugg-box\"></div>" +
-            "<div class=\"hrow chips\"><span class=\"chip on\" id=\"c-web\" onclick=\"pick('web')\">Web</span>" +
+            "<div class=\"mode-row\"><span class=\"chip on\" id=\"c-web\" onclick=\"pick('web')\">Web</span>" +
             "<span class=\"chip\" id=\"c-img\" onclick=\"pick('img')\">Images</span>" +
             "<span class=\"chip\" id=\"c-vid\" onclick=\"pick('vid')\">Videos</span>" +
             "</div>" +
-            "<div class=\"frow\"><a class=\"fpill\" href=\"https://duck.ai\"><span class=\"em\">\u2728</span>AI Chat</a>" +
-            "<a class=\"fpill\" href=\"rweb://newprivate\"><span class=\"em\">\uD83D\uDD76\uFE0F</span>Private Tab</a></div>"
+            "<div class=\"frow\"><a class=\"fpill\" href=\"https://duck.ai\">" + aiSvg + "<span>AI Chat</span></a>" +
+            "<a class=\"fpill\" href=\"rweb://newprivate\">" + shieldSvg + "<span>Private Tab</span></a></div>"
+    }
 
     private fun tileHtml(name: String, url: String, icons: Boolean): String {
         val host = Uri.parse(url).host ?: ""
@@ -3471,19 +3517,21 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         val b = typedSearchBases()
         return "<script>var B={web:" + JSONObject.quote(b.first) + ",img:" + JSONObject.quote(b.second) + ",vid:" + JSONObject.quote(b.third) +
             "};var cur='web';function pick(k){var v=document.getElementById('q').value.trim();if(v){cur=k;go();return;}cur=k;['web','img','vid'].forEach(function(x){document.getElementById('c-'+x).className=(x===k)?'chip on':'chip';});" +
-            "document.getElementById('q').placeholder=(k==='web')?'Search the web or type a website':(k==='img'?'Search images':'Search videos');}" +
+            "document.getElementById('q').placeholder=(k==='web')?'Search the web or type an address':(k==='img'?'Search images':'Search videos');}" +
             "function isDomain(v){return /^(https?:\\/\\/\\S+|(localhost|[a-z0-9-]+(\\.[a-z0-9-]+)+)(:\\d+)?(\\/\\S*)?)$/i.test(v)&&!/\\.\\./.test(v);}" +
             "function goWithQuery(v){if(!v){return false;}if(cur==='web'&&isDomain(v)){location.href=/^https?:\\/\\//i.test(v)?v:'https://'+v;return false;}location.href='rweb://s?k='+cur+'&q='+encodeURIComponent(v);return false;}" +
             "function go(){return goWithQuery(document.getElementById('q').value.trim());}" +
             "window._renderSugg=function(list){var box=document.getElementById('sugg');if(!box)return;if(!Array.isArray(list)||!list.length){box.style.display='none';box.innerHTML='';return;}box.innerHTML='';list.forEach(function(item){var btn=document.createElement('button');btn.type='button';btn.className='sugg-item';btn.textContent=item;btn.onclick=function(){document.getElementById('q').value=item;goWithQuery(item);};box.appendChild(btn);});box.style.display='block';};" +
             "window.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('q');if(inp){var t=null;inp.addEventListener('input',function(){clearTimeout(t);var val=inp.value;t=setTimeout(function(){if(window.DidduBridge&&DidduBridge.requestSuggestions){DidduBridge.requestSuggestions(val);} },160);});}setTimeout(function(){_secReady=true;},80);});" +
-            "var _secReady=false;function saveSec(d){if(!_secReady)return;var k=d.getAttribute('data-sec');if(k){location.href='rweb://toggle?k='+encodeURIComponent(k)+'&v='+(d.open?'1':'0');}}function filterCategory(s,c,b){if(typeof c==='undefined'){return;}var r=document.getElementById(s==='vids'?'vids':'news');if(!r){return;}" +
+            "var _secReady=false;" +
+            "function saveSec(d){if(!_secReady)return;var k=d.getAttribute('data-sec');if(k){location.href='rweb://toggle?k='+encodeURIComponent(k)+'&v='+(d.open?'1':'0');}}function filterCategory(s,c,b){if(typeof c==='undefined'){return;}var r=document.getElementById(s==='vids'?'vids':'news');if(!r){return;}" +
             "r.querySelectorAll(s==='vids'?'.vc':'.nw').forEach(function(e){var late=e.getAttribute('data-late')==='1';" +
             "var show=(c==='All')?!late:((e.getAttribute('data-cat')||'').split(' ').indexOf(c)>=0);e.style.display=show?'':'none';});" +
             "r.querySelectorAll('.cchip').forEach(function(x){x.classList.remove('on');});if(b){b.classList.add('on');}}</script>"
     }
 
     private fun hideSuggestions() {
+        suggestDebounceRunnable?.let { handler.removeCallbacks(it) }
         if (::suggestBox.isInitialized) suggestBox.visibility = View.GONE
     }
 
@@ -3625,8 +3673,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             val items = try {
                 val url = URL(autocompleteUrl(query))
                 val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 2500
-                    readTimeout = 2500
+                    connectTimeout = 1500
+                    readTimeout = 1500
                     setRequestProperty("User-Agent", mobileUa)
                 }
                 try {
