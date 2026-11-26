@@ -460,11 +460,12 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         fun requestSuggestions(query: String) {
             // The bridge is attached to every tab, so only the built-in start page (empty display URL) may use it.
             // tab.url is set in onPageStarted, before any script of the new page can run.
-            if (tab.priv || tab.url.isNotEmpty()) return
+            if (tab.url.isNotEmpty()) return
             val clean = query.trim()
-            val recents = matchingRecents(clean)
+            val recents = matchingRecents(clean, tab.priv)
             val recentsJs = JSONArray(recents).toString()
-            if (clean.length < 2) {
+            // Private tabs only get their own earlier searches, never live suggestions from the search engine.
+            if (clean.length < 2 || tab.priv) {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     tab.web.evaluateJavascript("if(window._renderSugg)window._renderSugg([]," + recentsJs + ");", null)
@@ -1223,7 +1224,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         val target = direct ?: (searchBase() + Uri.encode(text.trim()))
         if (text.trim().isEmpty()) return
         val t = currentOrNull() ?: return
-        if (!t.priv && direct == null) recordSearch(text)
+        if (direct == null) recordSearch(text, t.priv)
         navigate(t, target)
     }
 
@@ -2357,6 +2358,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
     }
 
     private fun wipePrivate(retries: Int = 3) {
+        synchronized(privateRecents) { privateRecents.clear() }
         try {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
                 ProfileStore.getInstance().deleteProfile(PRIVATE_PROFILE)
@@ -3472,11 +3474,16 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
 
     // ---- recent searches (never recorded in private tabs) ----
 
-    /** Earlier searches that contain what the person is typing now (not the identical text), newest first. */
-    private fun matchingRecents(typed: String, limit: Int = 3): List<String> {
+    // Searches made in private tabs are kept in memory only: they are offered again while private tabs are open and
+    // are forgotten when the last private tab closes. They are never written to disk.
+    private val privateRecents = ArrayList<String>()
+
+    /** Earlier searches that contain (or equal) what the person is typing now, newest first. */
+    private fun matchingRecents(typed: String, priv: Boolean, limit: Int = 3): List<String> {
         val q = typed.trim()
         if (q.isEmpty()) return emptyList()
-        return recentSearches().filter { it.contains(q, true) && !it.equals(q, true) }.take(limit)
+        val source = if (priv) synchronized(privateRecents) { ArrayList(privateRecents) } else recentSearches()
+        return source.filter { it.contains(q, true) }.take(limit)
     }
 
     private fun recentSearches(): List<String> = try {
@@ -3486,9 +3493,17 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         emptyList()
     }
 
-    private fun recordSearch(q: String) {
+    private fun recordSearch(q: String, priv: Boolean = false) {
         val t = q.trim().take(80)
         if (t.isEmpty()) return
+        if (priv) {
+            synchronized(privateRecents) {
+                privateRecents.removeAll { it.equals(t, true) }
+                privateRecents.add(0, t)
+                while (privateRecents.size > 20) privateRecents.removeAt(privateRecents.size - 1)
+            }
+            return
+        }
         val l = recentSearches().toMutableList()
         l.removeAll { it.equals(t, true) }
         l.add(0, t)
@@ -3511,7 +3526,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             "vid" -> b.third
             else -> b.first
         }
-        if (!tab.priv) recordSearch(text)
+        recordSearch(text, tab.priv)
         navigate(tab, base + Uri.encode(text))
     }
 
@@ -3559,7 +3574,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         hideKeyboard()
         hideSuggestions()
         currentOrNull()?.let {
-            if (!it.priv) recordSearch(q)
+            recordSearch(q, it.priv)
             navigate(it, searchBase() + Uri.encode(q))
         }
     }
@@ -3788,13 +3803,10 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         // Private tabs get no live suggestions, so they keep a plain search row.
         if (isPrivate) suggestBox.addView(suggestRow("Search the web for “" + q + "”", null) { searchFor(q) })
 
-        shownRecents = emptySet()
-        if (!isPrivate) {
-            val recents = matchingRecents(q)
-            shownRecents = recents.map { it.lowercase() }.toSet()
-            for (r in recents) {
-                suggestBox.addView(suggestRow("\u21BA  " + r, null) { openSearchOrAddress(r) })
-            }
+        val recents = matchingRecents(q, isPrivate)
+        shownRecents = recents.map { it.lowercase() }.toSet()
+        for (r in recents) {
+            suggestBox.addView(suggestRow("\u21BA  " + r, null) { openSearchOrAddress(r) })
         }
 
         val liveBox = LinearLayout(this).apply {
