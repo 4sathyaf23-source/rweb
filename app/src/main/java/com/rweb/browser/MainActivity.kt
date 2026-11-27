@@ -464,8 +464,7 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
             val clean = query.trim()
             val recents = matchingRecents(clean, tab.priv)
             val recentsJs = JSONArray(recents).toString()
-            // Private tabs only get their own earlier searches, never live suggestions from the search engine.
-            if (clean.length < 2 || tab.priv) {
+            if (clean.length < 2) {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     tab.web.evaluateJavascript("if(window._renderSugg)window._renderSugg([]," + recentsJs + ");", null)
@@ -3716,8 +3715,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         }
     }
 
-    private fun fetchLiveSuggestions(query: String, gen: Int, isPrivate: Boolean) {
-        if (isPrivate) return
+    // Private tabs get live suggestions too. The request carries no cookies and nothing is stored from it.
+    private fun fetchLiveSuggestions(query: String, gen: Int) {
         runIo {
             val items = try {
                 val url = URL(autocompleteUrl(query))
@@ -3787,21 +3786,13 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         liveSuggestContainer = null
         styleSuggestBox()
 
-        val tld = defaultTld()
-        val bare = q.removePrefix("www.")
-        if (Regex("^[A-Za-z0-9-]+$").matches(bare)) {
-            val first = bare.lowercase() + tld
-            suggestBox.addView(suggestRow("Go to " + first, "Website") { openAddress(first) })
-            for (o in tldChoices.filter { it != tld }.take(4)) {
-                val other = bare.lowercase() + o
-                suggestBox.addView(suggestRow(other, "Other ending") { openAddress(other) })
-            }
-        } else if (!q.contains(' ') && q.contains('.')) {
-            suggestBox.addView(suggestRow("Go to " + q, "Website") { openAddress(q) })
+        // Only a complete address (it has a domain ending) gets a "Go to" row. Plain words are never turned into
+        // guessed .com / .in / .org names; they get earlier searches and live search suggestions instead.
+        val directTarget = directDomainUrl(q)
+        if (directTarget != null) {
+            suggestBox.addView(suggestRow("Go to " + q, null) { openAddress(directTarget) })
         }
         val isPrivate = currentOrNull()?.priv == true
-        // Private tabs get no live suggestions, so they keep a plain search row.
-        if (isPrivate) suggestBox.addView(suggestRow("Search the web for “" + q + "”", null) { searchFor(q) })
 
         val recents = matchingRecents(q, isPrivate)
         shownRecents = recents.map { it.lowercase() }.toSet()
@@ -3826,8 +3817,8 @@ details[open] summary.nh::after{content:"\25B4";margin-left:10px;color:var(--sky
         }
         updateSuggestVisibility()
 
-        if (!isPrivate && q.length >= 2) {
-            fetchLiveSuggestions(q, gen, isPrivate = false)
+        if (q.length >= 2) {
+            fetchLiveSuggestions(q, gen)
         }
     }
 
